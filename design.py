@@ -899,6 +899,74 @@ def blade_section(chi):
 
     return xy
 
+def row_mesh(xy, rm, Dr, dx, s):
+    """Generate mesh for a blade row"""
+
+    nxd = 30
+    nxu = 100
+    nj = 5
+    nk = 49
+
+    xv = np.concatenate((
+        np.linspace(-dx[0],xy[0,0],nxu)[:-1],
+        xy[0,:],
+        np.linspace(xy[0,-1],xy[0,-1]+dx[1],nxd)[1:]))
+    ni = len(xv)
+    xi = np.array([-dx[0],xy[0,0],xy[0,-1],xy[0,-1]+dx[1]])
+    ri = np.array([rm[0], rm[0], rm[1], rm[1]])
+    Dri = np.array([Dr[0], Dr[0], Dr[1], Dr[1]])
+    rmv = np.interp(xv, xi, ri)
+    r1v = rmv - np.interp(xv, xi, Dri)*0.5
+    r2v = rmv + np.interp(xv, xi, Dri)*0.5
+    rt1v = np.concatenate((
+        np.ones((nxu-1,))*xy[1,0],
+        xy[1,:],
+        np.ones((nxd-1,))*xy[1,-1]))
+    rt2v = np.concatenate((
+        np.ones((nxu-1,))*xy[2,0],
+        xy[2,:],
+        np.ones((nxd-1,))*xy[2,-1])) + s
+
+    # f,a = plt.subplots()
+    # a.plot(xv, rt1v, '-x')
+    # a.plot(xv, rt2v, '-x')
+
+    # f,a = plt.subplots()
+    # a.plot(xv, rmv, '-x')
+    # a.plot(xv, r1v, '-x')
+    # a.plot(xv, r2v, '-x')
+
+    # Cosine pitch distribution
+    xhat = 0.5*(1.-np.cos(np.pi * np.linspace(0.,1.,nk)))
+
+    # Preallocate and loop over i-lines
+    sz = (ni, nj, nk)
+    x = np.empty(sz)
+    r = np.empty(sz)
+    rt = np.empty(sz)
+    for i in range(ni):
+        x[i,...] = xv[i]
+        rnow = np.tile(np.linspace(r1v[i],r2v[i],nj),(nk,1)).T
+        rtmnow = np.atleast_2d(xhat * rt1v[i] + (1.-xhat)*rt2v[i])
+        rtnow = rtmnow / rmv[i] * rnow
+        r[i,...] = rnow
+        rt[i,...] = rtnow
+
+    f,a = plt.subplots()
+    a.plot(x[:,0,:],rt[:,0,:],'k-')
+    a.plot(x[:,0,:].T,rt[:,0,:].T,'k-')
+
+    # f,a = plt.subplots()
+    # a.plot(rt[0,:,:],r[0,:,:],'k-')
+    # a.plot(rt[0,:,:].T,r[0,:,:].T,'k-')
+
+    return x, r, rt
+
+
+
+
+
+
 if __name__ == "__main__":
 
     # Constants
@@ -907,7 +975,7 @@ if __name__ == "__main__":
     cp = gamma / (gamma - 1.0) * rgas
 
     # Generate a stage in non-dimensional form
-    nd_stage = nondim_stage_const_span(
+    nd_stage = nondim_stage_from_Lam(
             phi=0.8,
             psi=1.6,
             Lam=0.5,
@@ -927,6 +995,8 @@ if __name__ == "__main__":
 
     # Get radii
     rm, Dr, _, _ = scale_stage(nd_stage, inlet, Omega, htr)
+    print(rm)
+    print(Dr)
 
 	# Blade sections
     xy_stator = blade_section(nd_stage.chi[:2])
@@ -948,15 +1018,33 @@ if __name__ == "__main__":
     cx_vane = Re * mu / roref / Vref
     cx_rotor = cx_vane
 
-
     # Put the blades on a common coordinate system
     gap_chord = 0.5
     xy_stator = xy_stator * cx_vane
     xy_rotor = xy_rotor * cx_rotor
     xy_rotor[0,:] = xy_rotor[0,:] + cx_vane * (1. + gap_chord)
 
+    # Pitch to chord using Zweifel
+    Z = 0.85
+    Alr_sta = np.radians(nd_stage.chi[:2])
+    Alr_rot = np.radians(nd_stage.chi[2:])
+    denom_sta = (np.cos(Alr_sta[1])**2.)*(
+            np.tan(Alr_sta[1]) - np.tan(Alr_sta[0]))
+    denom_rot = (np.cos(Alr_rot[1])**2.)*(
+            np.tan(Alr_rot[1]) - np.tan(Alr_rot[0]))
+    s_c = Z / 2. /np.array([denom_sta,-denom_rot])
+
+    xs, rs, rts = row_mesh(xy_stator, rm[:2], Dr[:2], [cx_vane * 3., cx_vane*0.25], s_c[0] * cx_vane)
+
+    xr, rr, rtr = row_mesh(xy_rotor, rm[2:], Dr[2:], [cx_vane*0.25, cx_rotor * 3.], s_c[1] * cx_rotor)
+
     # Plot out the blade shapes
     f, a = plt.subplots()
     a.plot(xy_stator[0,:],xy_stator[1:,:].T,'-x')
     a.plot(xy_rotor[0,:],xy_rotor[1:,:].T,'-x')
+    a.plot(xy_stator[0,:],xy_stator[1:,:].T + s_c[0] * cx_vane,'-x')
+    a.plot(xy_rotor[0,:],xy_rotor[1:,:].T + s_c[1] * cx_rotor,'-x')
+    a.axis('equal')
     plt.show()
+
+    
