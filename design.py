@@ -1,7 +1,7 @@
 """
 This file contains methods for the one-dimensional design of turbine stages.
 """
-import scipy.optimize
+import scipy.optimize, scipy.integrate
 import compflow as cf
 import numpy as np
 from collections import namedtuple
@@ -849,32 +849,62 @@ class Stage:
 
         return d
 
-def blade_section(cx, chi):
+def blade_section(chi):
     """Makes a simple blade geometry from one-dimensional flow parameters."""
     # Copy defaults from MEANGEN (Denton)
-    tkle     = 0.04 # LEADING EDGE THICKNESS/AXIAL CHORD.
-    tkte     = 0.04 # TRAILING EDGE THICKNESS/AXIAL CHORD.
-    tkmax   = 0.25 # MAXIMUM THICKNESS/AXIAL CHORD.
-    xtkmax  = 0.40 # FRACTION OF AXIAL CHORD AT MAXIMUM THICKNESS 
+    tle     = 0.04 # LEADING EDGE THICKNESS/AXIAL CHORD.
+    tte     = 0.04 # TRAILING EDGE THICKNESS/AXIAL CHORD.
+    tmax   = 0.25 # MAXIMUM THICKNESS/AXIAL CHORD.
+    xtmax  = 0.40 # FRACTION OF AXIAL CHORD AT MAXIMUM THICKNESS 
     xmodle   = 0.02 # FRACTION OF AXIAL CHORD OVER WHICH THE LE IS MODIFIED.
     xmodte   = 0.01 # FRACTION OF AXIAL CHORD OVER WHICH THE TE IS MODIFIED.
     tk_typ   = 2.0  # FORM OF BLADE THICKNESS DISTRIBUTION.
-    zweifel  = 0.85 # ZWEIFEL COEFFICIENT FOR TURBINES
-    expo     = 1.0  # EXPONENT FOR TRANSFORMING THE AXIAL POSITION.
-    xhat = np.linspace(0.,1.)
-    x = 0.5*(1.-np.cos(np.pi * xhat))
+
+    # Camber line
+    xhat = 0.5*(1.-np.cos(np.pi * np.linspace(0.,1.)))
     tanchi_lim = np.tan(np.radians(chi))
-    tanchi = np.interp(x,(0.,1.),tanchi_lim)
+    tanchi = np.interp(xhat,(0.,1.),tanchi_lim)
+    yhat = np.insert(scipy.integrate.cumtrapz(tanchi, xhat), 0, 0.)
 
-    f,a = plt.subplots()
-    a.plot(x,tanchi,'k-x')
+    power = np.log(0.5)/np.log(xtmax)
+    xtrans  = xhat**power
 
+    # Linear thickness component for leading/trailing edges
+    tlin = tle + xhat*(tte - tle)
+
+    # Additional component to make up maximum thickness
+    tadd = tmax - (tle + xtmax*(tte-tle))
+
+    # Total thickness
+    thick  = tlin + tadd*(1.0 - np.abs(xtrans-0.5)**tk_typ/(0.5**tk_typ))
+
+    # Thin the leading and trailing edges
+    xhat1 = 1. - xhat
+    fac_thin = np.ones_like(xhat)
+    fac_thin[xhat<xmodle] = (xhat[xhat<xmodle]/xmodle)**0.3
+    fac_thin[xhat1<xmodte] = (xhat1[xhat1<xmodte]/xmodte)**0.3
+
+    # Upper and lower surfaces
+    yup = yhat + thick*0.5*fac_thin
+    ydown = yhat - thick*0.5*fac_thin
+
+    # # Plot
+    # f,a = plt.subplots()
+    # a.plot(xhat,yhat,'k--')
+    # a.plot(xhat,yup,'-x')
+    # a.plot(xhat,ydown,'-x')
+    # a.axis('equal')
+
+    xy = np.vstack((xhat, yup, ydown))
+
+    return xy
 
 if __name__ == "__main__":
 
     # Constants
     gamma = 1.4
     rgas = 287.14
+    cp = gamma / (gamma - 1.0) * rgas
 
     # Generate a stage in non-dimensional form
     nd_stage = nondim_stage_const_span(
@@ -891,13 +921,42 @@ if __name__ == "__main__":
     Omega = 50.0 * 2. * np.pi
     htr = 0.99
     Poin = 16e5
-    Toin = 16e3
+    Toin = 1.6e3
     Alin = 0.0
     inlet = State(gamma, rgas, Poin, Toin, Alin)
 
-    # Get geometry
+    # Get radii
     rm, Dr, _, _ = scale_stage(nd_stage, inlet, Omega, htr)
 
-	# Blade section
-    blade_section(0.05, nd_stage.chi[:2])
+	# Blade sections
+    xy_stator = blade_section(nd_stage.chi[:2])
+    xy_rotor = blade_section(nd_stage.chi[2:])
+
+    # Get viscosity at the inlet condition using 0.62 power approximation
+    muref = 1.8e-5
+    Tref = 288.0
+    mu = muref * (Toin/Tref)**0.62
+
+    # Use mach to get velocity and density at vane exit
+    V_cpTo = cf.from_Ma('V_cpTo',nd_stage.Ma_out[0],gamma)
+    Vref = V_cpTo * np.sqrt(cp * Toin)
+    rhoo_rho = cf.from_Ma('rhoo_rho',nd_stage.Ma_out[0],gamma)
+    roref = Poin / rgas / Toin / rhoo_rho
+
+    # Use reynolds number to set chords
+    Re = 3e6
+    cx_vane = Re * mu / roref / Vref
+    cx_rotor = cx_vane
+
+
+    # Put the blades on a common coordinate system
+    gap_chord = 0.5
+    xy_stator = xy_stator * cx_vane
+    xy_rotor = xy_rotor * cx_rotor
+    xy_rotor[0,:] = xy_rotor[0,:] + cx_vane * (1. + gap_chord)
+
+    # Plot out the blade shapes
+    f, a = plt.subplots()
+    a.plot(xy_stator[0,:],xy_stator[1:,:].T,'-x')
+    a.plot(xy_rotor[0,:],xy_rotor[1:,:].T,'-x')
     plt.show()
