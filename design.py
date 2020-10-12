@@ -3,6 +3,8 @@ This file contains methods for the one-dimensional design of turbine stages.
 """
 import scipy.optimize, scipy.integrate
 import compflow as cf
+from ts import ts_tstream_grid, ts_tstream_type, ts_tstream_default
+from ts import ts_tstream_patch_kind, ts_tstream_check_grid
 import numpy as np
 from collections import namedtuple
 import matplotlib.pyplot as plt
@@ -42,7 +44,7 @@ StageParams = [
 ]
 NonDimStage = namedtuple('NonDimStage', StageParams)
 
-def nondim_vane(*, Al, Ma_out, ga, Yp, rr, drr=None, const_Vx=None):
+def nondim_vane( Al, Ma_out, ga, Yp, rr, drr=None, const_Vx=None):
     """Generate a non-dimensional vane design."""
 
     if drr is None and const_Vx is None:
@@ -68,6 +70,7 @@ def nondim_vane(*, Al, Ma_out, ga, Yp, rr, drr=None, const_Vx=None):
     # With known Ma there is an algebraic equation for Po_out/Po_in
     Po_P_out = cf.from_Ma('Po_P', Ma_out, ga)
     Por = (1. - Yp) / (1. - Yp / Po_P_out )
+    PR = Por / Po_P_out
 
     # We know what exit capacity should be
     # Use it to work out inlet Ma if lossless
@@ -86,13 +89,13 @@ def nondim_vane(*, Al, Ma_out, ga, Yp, rr, drr=None, const_Vx=None):
         Yp=Yp,
         chi=Al,
         Ax_Axin=dr_dr_in,
-        PR=Por,
+        PR=PR,
         Vx_rat=Vx_rat,
         rm_rat=rr
     )
     return dat
 
-def nondim_vane_const_Vx(*, Al, Ma_out, ga, Yp, rr):
+def nondim_vane_const_Vx( Al, Ma_out, ga, Yp, rr):
     """Adjust span to produce an N-D vane with Vx=constant."""
     def iter_drr(x):
         vane_now = nondim_vane(Al=Al, Ma_out=Ma_out, ga=ga, Yp=Yp, rr=rr,
@@ -105,7 +108,7 @@ def nondim_vane_const_Vx(*, Al, Ma_out, ga, Yp, rr):
                             drr=res.root)
     return vane_out
 
-def nondim_stage_from_Al(*,
+def nondim_stage_from_Al(
                          phi, psi, Al,  # Velocity triangles
                          Ma, ga,  # Compressibility
                          eta,  # Loss
@@ -222,7 +225,7 @@ def nondim_stage_from_Al(*,
 
     return dat
 
-def nondim_stage_from_Lam(*,
+def nondim_stage_from_Lam(
                           phi, psi, Lam, Alin,  # Velocity triangles
                           Ma, ga,  # Compressibility
                           eta,  # Loss
@@ -268,7 +271,7 @@ def nondim_stage_from_Lam(*,
 
     return stg_out
 
-def nondim_stage_const_span(*,
+def nondim_stage_const_span(
                           phi, psi, Lam, Alin,  # Velocity triangles
                           Ma, ga,  # Compressibility
                           eta,  # Loss
@@ -288,7 +291,7 @@ def nondim_stage_const_span(*,
                                    Vx_rat=res.x)
     return stg_out
 
-def nondim_stage(*, phi, psi, Lam, Alin, Ma, ga, eta, const_Vx):
+def nondim_stage( phi, psi, Lam, Alin, Ma, ga, eta, const_Vx):
     if const_Vx:
         return nondim_stage_from_Lam(
             phi=phi, psi=psi, Lam=Lam, Alin=Alin, Ma=Ma, ga=ga, eta=eta)
@@ -963,9 +966,122 @@ def row_mesh(xy, rm, Dr, dx, s):
     return x, r, rt
 
 
+def add_to_grid(g, x, r, rt, bid, rpm):
+    ni, nj, nk = np.shape(x)
+    b = ts_tstream_type.TstreamBlock()
+    b.bid = bid
+    b.np = 0
+    b.ni = ni
+    b.nj = nj
+    b.nk = nk
+    b.procid = 0
+    b.threadid = 0
+    g.add_block(b)
+    g.set_bp("x", ts_tstream_type.float, bid, x)
+    g.set_bp("r", ts_tstream_type.float, bid, r)
+    g.set_bp("rt", ts_tstream_type.float, bid, rt)
 
+    # Periodic patches
+    p1 = ts_tstream_type.TstreamPatch()
+    p1.kind = ts_tstream_patch_kind.periodic
+    p1.bid = bid
+    p1.ist = 0
+    p1.ien = ni
+    p1.jst = 0
+    p1.jen = nj
+    p1.kst = 0
+    p1.ken = 1
+    p1.nxbid = bid
+    p1.nxpid = 1
+    p1.idir = 0
+    p1.jdir = 1
+    p1.kdir = 6
+    p1.pid = g.add_patch(bid, p1)
 
+    p2 = ts_tstream_type.TstreamPatch()
+    p2.kind = ts_tstream_patch_kind.periodic
+    p2.bid = bid
+    p2.ist = 0
+    p2.ien = ni
+    p2.jst = 0
+    p2.jen = nj
+    p2.kst = nk-1
+    p2.ken = nk
+    p2.nxbid = bid
+    p2.nxpid = 0
+    p2.idir = 0
+    p2.jdir = 1
+    p2.kdir = 6
+    p2.pid = g.add_patch(bid, p2)
 
+    # Slip wall
+    p3 = ts_tstream_type.TstreamPatch()
+    p3.kind = ts_tstream_patch_kind.slipwall
+    p3.bid = bid
+    p3.ist = 0
+    p3.ien = ni
+    p3.jst = 0
+    p3.jen = 1
+    p3.kst = 0
+    p3.ken = nk
+    p3.nxbid = 0
+    p3.nxpid = 0
+    p3.idir = 0
+    p3.jdir = 6
+    p3.kdir = 2
+    p3.pid = g.add_patch(bid, p3)
+
+    # Slip wall
+    p4 = ts_tstream_type.TstreamPatch()
+    p4.kind = ts_tstream_patch_kind.slipwall
+    p4.bid = bid
+    p4.ist = 0
+    p4.ien = ni
+    p4.jst = nj-1
+    p4.jen = nj
+    p4.kst = 0
+    p4.ken = nk
+    p4.nxbid = 0
+    p4.nxpid = 0
+    p4.idir = 0
+    p4.jdir = 6
+    p4.kdir = 2
+    p4.pid = g.add_patch(bid, p4)
+
+    # Rotation
+    g.set_bv("rpm", ts_tstream_type.float, bid, rpm)
+    g.set_bv("rpmi1", ts_tstream_type.float, bid, rpm)
+    g.set_bv("rpmi2", ts_tstream_type.float, bid, rpm)
+    g.set_bv("rpmj1", ts_tstream_type.float, bid, rpm)
+    g.set_bv("rpmj2", ts_tstream_type.float, bid, rpm)
+    g.set_bv("rpmk1", ts_tstream_type.float, bid, rpm)
+    g.set_bv("rpmk2", ts_tstream_type.float, bid, rpm)
+
+    # Default avs
+    for name in ts_tstream_default.av:
+        val = ts_tstream_default.av[name]
+        if type(val) == type(1):
+            g.set_av(name, ts_tstream_type.int, val)
+        else:
+            g.set_av(name, ts_tstream_type.float, val)
+
+    for name in ts_tstream_default.bv:
+        for bid in g.get_block_ids():
+            val = ts_tstream_default.bv[name]
+            if type(val) == type(1):
+                g.set_bv(name, ts_tstream_type.int, bid, val)
+            else:
+                g.set_bv(name, ts_tstream_type.float, bid, val)
+
+    # Mixing length limit
+    pitch = np.ptp(rt[0,0,:])
+    t_pitch = pitch/np.mean(r[0,0,:])
+    nb = 2. * np.pi / t_pitch
+    print(nb)
+    print(int(nb))
+    g.set_bv("xllim", ts_tstream_type.float, bid, 0.03*pitch)
+    g.set_bv("fblade", ts_tstream_type.float, bid, nb)
+    g.set_bv("nblade", ts_tstream_type.float, bid, nb)
 
 if __name__ == "__main__":
 
@@ -987,12 +1103,14 @@ if __name__ == "__main__":
 
     # Choose dimensional conditions
     Omega = 50.0 * 2. * np.pi
+    rpm = Omega / 2. * np.pi * 60.
     htr = 0.99
     Poin = 16e5
     Toin = 1.6e3
     Alin = 0.0
     inlet = State(gamma, rgas, Poin, Toin, Alin)
 
+    Pout = Poin * nd_stage.PR
     # Get radii
     rm, Dr, _, _ = scale_stage(nd_stage, inlet, Omega, htr)
     print(rm)
@@ -1018,6 +1136,7 @@ if __name__ == "__main__":
     cx_vane = Re * mu / roref / Vref
     cx_rotor = cx_vane
 
+    print(nd_stage)
     # Put the blades on a common coordinate system
     gap_chord = 0.5
     xy_stator = xy_stator * cx_vane
@@ -1047,4 +1166,103 @@ if __name__ == "__main__":
     a.axis('equal')
     plt.show()
 
+    g = ts_tstream_grid.TstreamGrid()
+    add_to_grid(g, xs, rs, rts, 0, 0.)
+    add_to_grid(g, xr, rr, rtr, 1, rpm)
+
+
+    # Inlet
+    ni, nj, nk = np.shape(xs)
+    pin = ts_tstream_type.TstreamPatch()
+    pin.kind = ts_tstream_patch_kind.inlet
+    pin.bid = 0
+    pin.ist = 0
+    pin.ien = 1
+    pin.jst = 0
+    pin.jen = nj
+    pin.kst = 0
+    pin.ken = nk
+    pin.nxbid = 0
+    pin.nxpid = 0
+    pin.idir = 6
+    pin.jdir = 1
+    pin.kdir = 2
+    pin.pid = g.add_patch(0, pin)
+
+    bid=0
+    pid=pin.pid
+    print(pin.pid)
+    p = g.get_patch( bid,pid)
+    yaw = np.zeros(( nk,  nj), np.float32)
+    pitch = np.zeros(( nk,  nj), np.float32)
+    pstag = np.zeros(( nk,  nj), np.float32)
+    tstag = np.zeros(( nk,  nj), np.float32)
+
+    pstag += Poin
+    tstag += Toin
+    yaw += 0.0
+    pitch += 0.0
+
+    g.set_pp("yaw", ts_tstream_type.float, bid, pid, yaw)
+    g.set_pp("pitch", ts_tstream_type.float, bid, pid, pitch)
+    g.set_pp("pstag", ts_tstream_type.float, bid, pid, pstag)
+    g.set_pp("tstag", ts_tstream_type.float, bid, pid, tstag)
+    g.set_pv("rfin", ts_tstream_type.float, bid, pid, 0.5)
+    g.set_pv("sfinlet", ts_tstream_type.float, bid, pid, 1.0)
+
+    # Outlet
+    ni, nj, nk = np.shape(xr)
+    pout = ts_tstream_type.TstreamPatch()
+    pout.kind = ts_tstream_patch_kind.outlet
+    pout.bid = 1
+    pout.ist = ni-1
+    pout.ien = ni
+    pout.jst = 0
+    pout.jen = nj
+    pout.kst = 0
+    pout.ken = nk
+    pout.nxbid = 0
+    pout.nxpid = 0
+    pout.idir = 6
+    pout.jdir = 1
+    pout.kdir = 2
+    pout.pid = g.add_patch(1, pout)
+
+    bid=1
+    pid=4
+    p = g.get_patch(bid,pid)
+    g.set_pv("throttle_type", ts_tstream_type.int, bid, pid, 0)
+    g.set_pv("ipout", ts_tstream_type.int, bid, pid, 3)
+    g.set_pv("pout", ts_tstream_type.float, bid, pid, Pout)
+
+    # other block variables
+    for bid in g.get_block_ids():
+        g.set_bv("fmgrid", ts_tstream_type.float, bid, 0.2)
+        g.set_bv("poisson_fmgrid", ts_tstream_type.float, bid, 0.1)
+
+    g.set_av("restart", ts_tstream_type.int, 0)
+    g.set_av("poisson_restart", ts_tstream_type.int, 0)
+    g.set_av("poisson_nstep", ts_tstream_type.int, 5000)
+    g.set_av("ilos", ts_tstream_type.int, 1)
+    g.set_av("nlos", ts_tstream_type.int, 5)
+    g.set_av("nstep", ts_tstream_type.int, 20000)
+    g.set_av("nchange", ts_tstream_type.int, 5000)
+    g.set_av("dampin", ts_tstream_type.float, 5.0)
+    g.set_av("sfin", ts_tstream_type.float, 0.5)
+    g.set_av("facsecin", ts_tstream_type.float, 0.005)
+    g.set_av("cfl", ts_tstream_type.float, 0.4)
+    g.set_av("poisson_cfl", ts_tstream_type.float, 0.5)
+    g.set_av("fac_stmix", ts_tstream_type.float, 0.0)
+    g.set_av("rfmix", ts_tstream_type.float, 0.01)
+    g.set_av("viscosity", ts_tstream_type.float, muref)
+    g.set_av("viscosity_law", ts_tstream_type.int, 1)
+
+    for bv in g.get_bv_ids():
+        print(bv)
+        g.get_bv(bv,1)
+
+    # ts_tstream_load_balance.load_balance(g, 1)
+    
+    g.write_hdf5("input_1.hdf5")
+    
     
