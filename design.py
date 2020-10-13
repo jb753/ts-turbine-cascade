@@ -864,7 +864,7 @@ def blade_section(chi):
     tk_typ   = 2.0  # FORM OF BLADE THICKNESS DISTRIBUTION.
 
     # Camber line
-    xhat = 0.5*(1.-np.cos(np.pi * np.linspace(0.,1.)))
+    xhat = 0.5*(1.-np.cos(np.pi * np.linspace(0.,1.,100)))
     tanchi_lim = np.tan(np.radians(chi))
     tanchi = np.interp(xhat,(0.,1.),tanchi_lim)
     yhat = np.insert(scipy.integrate.cumtrapz(tanchi, xhat), 0, 0.)
@@ -905,30 +905,46 @@ def blade_section(chi):
 def row_mesh(xy, rm, Dr, dx, s):
     """Generate mesh for a blade row"""
 
-    nxd = 30
+    nxd = 20
     nxu = 100
     nj = 5
-    nk = 49
+    nk = 65
+
+    # Add Cosine clustering away from LE/TE
+    cx = np.ptp(xy[0,:])
+    x_up = -0.5 * (1. - np.cos(np.pi * np.linspace(-0.5,0.,50))) * cx
+    x_dwn = 0.5 * (1. - np.cos(np.pi * np.linspace(0.,0.5,50))) * cx
+
+    rt_up = np.ones_like(x_up) * xy[1,0]
+    rt_dwn = np.ones_like(x_down) * xy[1,-1]
+
+    xy_up = np.vstack((x_up,rt_up,up))
+    xy_dwn = np.vstack((x_up,rt_up,up))
+
+    xy = np.hstack((xy_up,xy,xy_dwn))
+
 
     xv = np.concatenate((
-        np.linspace(-dx[0],xy[0,0],nxu)[:-1],
+        np.linspace(-dx[0],0.0,nxu)[:-1]-0.5*cx+xy[0,0],
+        dx_up[:-1] + xy[0,0],
         xy[0,:],
-        np.linspace(xy[0,-1],xy[0,-1]+dx[1],nxd)[1:]))
+        dx_dwn[1:] + xy[0,-1],
+        np.linspace(0.,dx[1],nxd)[1:]+0.5*cx+xy[0,-1]))
     ni = len(xv)
-    xi = np.array([-dx[0],xy[0,0],xy[0,-1],xy[0,-1]+dx[1]])
+    xi = np.array([xy[0,0]-dx[0],xy[0,0],xy[0,-1],xy[0,-1]+dx[1]])
     ri = np.array([rm[0], rm[0], rm[1], rm[1]])
     Dri = np.array([Dr[0], Dr[0], Dr[1], Dr[1]])
     rmv = np.interp(xv, xi, ri)
     r1v = rmv - np.interp(xv, xi, Dri)*0.5
     r2v = rmv + np.interp(xv, xi, Dri)*0.5
     rt1v = np.concatenate((
-        np.ones((nxu-1,))*xy[1,0],
+        np.ones((nxu-1+50,))*xy[1,0],
         xy[1,:],
-        np.ones((nxd-1,))*xy[1,-1]))
+        np.ones((nxd-1+50,))*xy[1,-1]))
     rt2v = np.concatenate((
-        np.ones((nxu-1,))*xy[2,0],
+        np.ones((nxu-1+50,))*xy[2,0],
         xy[2,:],
-        np.ones((nxd-1,))*xy[2,-1])) + s
+        np.ones((nxd-1+50,))*xy[2,-1])) + s
 
     # f,a = plt.subplots()
     # a.plot(xv, rt1v, '-x')
@@ -940,7 +956,7 @@ def row_mesh(xy, rm, Dr, dx, s):
     # a.plot(xv, r2v, '-x')
 
     # Cosine pitch distribution
-    xhat = 0.5*(1.-np.cos(np.pi * np.linspace(0.,1.,nk)))
+    xhat = 0.5*(1.-np.cos(np.pi * np.linspace(1.,0.,nk)))
 
     # Preallocate and loop over i-lines
     sz = (ni, nj, nk)
@@ -955,19 +971,32 @@ def row_mesh(xy, rm, Dr, dx, s):
         r[i,...] = rnow
         rt[i,...] = rtnow
 
-    f,a = plt.subplots()
-    a.plot(x[:,0,:],rt[:,0,:],'k-')
-    a.plot(x[:,0,:].T,rt[:,0,:].T,'k-')
+    # f,a = plt.subplots()
+    # a.plot(x[:,0,:],rt[:,0,:],'k-')
+    # a.plot(x[:,0,:].T,rt[:,0,:].T,'k-')
 
     # f,a = plt.subplots()
-    # a.plot(rt[0,:,:],r[0,:,:],'k-')
-    # a.plot(rt[0,:,:].T,r[0,:,:].T,'k-')
+    # a.plot(rt[5,:,:],r[5,:,:],'k-')
+    # a.plot(rt[5,:,:].T,r[5,:,:].T,'k-')
 
     return x, r, rt
 
 
 def add_to_grid(g, x, r, rt, bid, rpm):
+
     ni, nj, nk = np.shape(x)
+
+    # Permute the coordinates into C-style ordering
+    xp = np.zeros((nk, nj, ni), np.float32)
+    rp = np.zeros((nk, nj, ni), np.float32)
+    rtp = np.zeros((nk, nj, ni), np.float32)
+    for k in range(nk):
+        for j in range(nj):
+            for i in range(ni):
+                xp[k,j,i] = x[i,j,k]
+                rp[k,j,i] = r[i,j,k]
+                rtp[k,j,i] = rt[i,j,k]
+
     b = ts_tstream_type.TstreamBlock()
     b.bid = bid
     b.np = 0
@@ -977,16 +1006,27 @@ def add_to_grid(g, x, r, rt, bid, rpm):
     b.procid = 0
     b.threadid = 0
     g.add_block(b)
-    g.set_bp("x", ts_tstream_type.float, bid, x)
-    g.set_bp("r", ts_tstream_type.float, bid, r)
-    g.set_bp("rt", ts_tstream_type.float, bid, rt)
+    g.set_bp("x", ts_tstream_type.float, bid, xp)
+    g.set_bp("r", ts_tstream_type.float, bid, rp)
+    g.set_bp("rt", ts_tstream_type.float, bid,rtp)
+
+    # Locate where blades are 
+    theta = rt/r
+    dt = theta[:,0,-1] - theta[:,0,0]
+    t_pitch = dt[0]
+    ist = int(np.argmax(dt<t_pitch))
+    ien = ni - int(np.argmax(dt[::-1]<t_pitch))
+    print(dt.max())
+    print(dt.min())
+    print(ist,ien)
+    print('ni',ni)
 
     # Periodic patches
     p1 = ts_tstream_type.TstreamPatch()
     p1.kind = ts_tstream_patch_kind.periodic
     p1.bid = bid
     p1.ist = 0
-    p1.ien = ni
+    p1.ien = ist
     p1.jst = 0
     p1.jen = nj
     p1.kst = 0
@@ -1002,7 +1042,7 @@ def add_to_grid(g, x, r, rt, bid, rpm):
     p2.kind = ts_tstream_patch_kind.periodic
     p2.bid = bid
     p2.ist = 0
-    p2.ien = ni
+    p2.ien = ist
     p2.jst = 0
     p2.jen = nj
     p2.kst = nk-1
@@ -1013,6 +1053,39 @@ def add_to_grid(g, x, r, rt, bid, rpm):
     p2.jdir = 1
     p2.kdir = 6
     p2.pid = g.add_patch(bid, p2)
+
+    # Periodic patches
+    p1a = ts_tstream_type.TstreamPatch()
+    p1a.kind = ts_tstream_patch_kind.periodic
+    p1a.bid = bid
+    p1a.ist = ien
+    p1a.ien = ni
+    p1a.jst = 0
+    p1a.jen = nj
+    p1a.kst = 0
+    p1a.ken = 1
+    p1a.nxbid = bid
+    p1a.nxpid = 3
+    p1a.idir = 0
+    p1a.jdir = 1
+    p1a.kdir = 6
+    p1a.pid = g.add_patch(bid, p1a)
+
+    p2a = ts_tstream_type.TstreamPatch()
+    p2a.kind = ts_tstream_patch_kind.periodic
+    p2a.bid = bid
+    p2a.ist = ien
+    p2a.ien = ni
+    p2a.jst = 0
+    p2a.jen = nj
+    p2a.kst = nk-1
+    p2a.ken = nk
+    p2a.nxbid = bid
+    p2a.nxpid = 2
+    p2a.idir = 0
+    p2a.jdir = 1
+    p2a.kdir = 6
+    p2a.pid = g.add_patch(bid, p2a)
 
     # Slip wall
     p3 = ts_tstream_type.TstreamPatch()
@@ -1074,9 +1147,8 @@ def add_to_grid(g, x, r, rt, bid, rpm):
                 g.set_bv(name, ts_tstream_type.float, bid, val)
 
     # Mixing length limit
-    pitch = np.ptp(rt[0,0,:])
-    t_pitch = pitch/np.mean(r[0,0,:])
     nb = 2. * np.pi / t_pitch
+    pitch = np.ptp(rt[0,0,:])
     print(nb)
     print(int(nb))
     g.set_bv("xllim", ts_tstream_type.float, bid, 0.03*pitch)
@@ -1135,13 +1207,15 @@ if __name__ == "__main__":
     Re = 3e6
     cx_vane = Re * mu / roref / Vref
     cx_rotor = cx_vane
+    cx = np.array((cx_vane, cx_rotor))
 
     print(nd_stage)
     # Put the blades on a common coordinate system
     gap_chord = 0.5
+    gap = 0.5 * cx_vane
     xy_stator = xy_stator * cx_vane
     xy_rotor = xy_rotor * cx_rotor
-    xy_rotor[0,:] = xy_rotor[0,:] + cx_vane * (1. + gap_chord)
+    xy_rotor[0,:] = xy_rotor[0,:] + cx_vane + gap
 
     # Pitch to chord using Zweifel
     Z = 0.85
@@ -1153,10 +1227,16 @@ if __name__ == "__main__":
             np.tan(Alr_rot[1]) - np.tan(Alr_rot[0]))
     s_c = Z / 2. /np.array([denom_sta,-denom_rot])
 
-    xs, rs, rts = row_mesh(xy_stator, rm[:2], Dr[:2], [cx_vane * 3., cx_vane*0.25], s_c[0] * cx_vane)
+    # Round to nearest whole number of blades
+    nb = np.round(2. * np.pi * rm[0] / (s_c * cx))
+    s_c =  2. * np.pi * rm[0] /nb / cx
 
-    xr, rr, rtr = row_mesh(xy_rotor, rm[2:], Dr[2:], [cx_vane*0.25, cx_rotor * 3.], s_c[1] * cx_rotor)
+    xs, rs, rts = row_mesh(xy_stator, rm[:2], Dr[:2], [cx_vane * 3., gap/2.], s_c[0] * cx_vane)
 
+    xr, rr, rtr = row_mesh(xy_rotor, rm[2:], Dr[2:], [gap/2., cx_rotor * 3.], s_c[1] * cx_rotor)
+
+    f, a = plt.subplots()
+    a.plot(np.diff(xs[:,0,0]),'-x')
     # Plot out the blade shapes
     f, a = plt.subplots()
     a.plot(xy_stator[0,:],xy_stator[1:,:].T,'-x')
@@ -1166,7 +1246,10 @@ if __name__ == "__main__":
     a.axis('equal')
     plt.show()
 
+
+
     g = ts_tstream_grid.TstreamGrid()
+    # g = None
     add_to_grid(g, xs, rs, rts, 0, 0.)
     add_to_grid(g, xr, rr, rtr, 1, rpm)
 
@@ -1245,7 +1328,7 @@ if __name__ == "__main__":
     g.set_av("poisson_nstep", ts_tstream_type.int, 5000)
     g.set_av("ilos", ts_tstream_type.int, 1)
     g.set_av("nlos", ts_tstream_type.int, 5)
-    g.set_av("nstep", ts_tstream_type.int, 20000)
+    g.set_av("nstep", ts_tstream_type.int, 0)
     g.set_av("nchange", ts_tstream_type.int, 5000)
     g.set_av("dampin", ts_tstream_type.float, 5.0)
     g.set_av("sfin", ts_tstream_type.float, 0.5)
@@ -1257,12 +1340,19 @@ if __name__ == "__main__":
     g.set_av("viscosity", ts_tstream_type.float, muref)
     g.set_av("viscosity_law", ts_tstream_type.int, 1)
 
-    for bv in g.get_bv_ids():
-        print(bv)
-        g.get_bv(bv,1)
-
     # ts_tstream_load_balance.load_balance(g, 1)
     
     g.write_hdf5("input_1.hdf5")
     
-    
+
+    x0 = g.get_bp("x", 0)
+    r0 = g.get_bp("r", 0)
+    rt0 = g.get_bp("rt", 0)
+
+    f,a = plt.subplots()
+    a.plot(x0[:,0,:],rt0[:,0,:],'k-')
+    a.plot(x0[:,0,:].T,rt0[:,0,:].T,'k-')
+    plt.show()
+
+
+
