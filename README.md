@@ -18,11 +18,16 @@ source /usr/local/software/turbostream/ts3610/bashrc_module_ts3610
 python make_design.py
 ```
 
-4. Run Turbostream on the input file (this will print lots of numbers to thes
+4. Run Turbostream on the input file (this will print lots of numbers to the
    screen as the calculation progresses, and save an output file at the end),
 ```
 mpirun -npernode 1 -np 1 turbostream input_1.hdf5 output_1 1
 ```
+You can capture the output and save it to a file by using,
+```
+mpirun -npernode 1 -np 1 turbostream input_1.hdf5 output_1 1 > log_1.txt &
+```
+and view it in the terminal using `less log_1.txt`.
 
 5. Create plots of interest by editing `plot.py` and running,
 ```

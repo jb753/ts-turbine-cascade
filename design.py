@@ -895,12 +895,13 @@ def blade_section(chi):
     yup = yhat + thick*0.5*fac_thin
     ydown = yhat - thick*0.5*fac_thin
 
-    # # Plot
-    # f,a = plt.subplots()
-    # a.plot(xhat,yhat,'k--')
-    # a.plot(xhat,yup,'-x')
-    # a.plot(xhat,ydown,'-x')
-    # a.axis('equal')
+    # Plot
+    f,a = plt.subplots()
+    a.plot(xhat,yhat,'k--')
+    a.plot(xhat,yup,'-x')
+    a.plot(xhat,ydown,'-x')
+    a.axis('equal')
+    plt.show()
 
     xy = np.vstack((xhat, yup, ydown))
 
@@ -1183,7 +1184,7 @@ def generate(fname, phi, psi, Lam, Ma, eta, gap_chord ):
 
     # Choose dimensional conditions
     Omega = 50.0 * 2. * np.pi
-    htr = 0.999
+    htr = 0.99
     Poin = 16e5
     Toin = 1.6e3
     Alin = 0.0
@@ -1369,7 +1370,7 @@ def generate(fname, phi, psi, Lam, Ma, eta, gap_chord ):
     # other block variables
     for bid in g.get_block_ids():
         g.set_bv("fmgrid", ts_tstream_type.float, bid, 0.2)
-        g.set_bv("poisson_fmgrid", ts_tstream_type.float, bid, 0.1)
+        g.set_bv("poisson_fmgrid", ts_tstream_type.float, bid, 0.05)
 
     g.set_av("restart", ts_tstream_type.int, 0)
     g.set_av("poisson_restart", ts_tstream_type.int, 0)
