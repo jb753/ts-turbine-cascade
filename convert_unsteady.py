@@ -3,10 +3,23 @@ from ts import ts_tstream_reader, ts_tstream_steady_to_unsteady, ts_tstream_type
 from ts import ts_tstream_load_balance, ts_tstream_patch_kind
 
 if __name__ == "__main__":
+    
+    # Number of cycles to run for
+    ncycle = 16
+
+    # Time steps per cycle
+    nstep_cycle = 72
+
+    # File name of steady soln
+    fname = "output_1.hdf5"
+
+    #
+    # Should not need to change below this line
+    #
 
     # Read in the converged steady solution
     tsr = ts_tstream_reader.TstreamReader()
-    g = tsr.read("output_1.hdf5")
+    g = tsr.read(fname)
     bids = g.get_block_ids()
 
     # find the sector size required
@@ -42,9 +55,6 @@ if __name__ == "__main__":
     rpm = g.get_bv('rpm',bids[-1])
     freq = rpm / 60. * (sect * dup).max()
     print 'frequency', freq, 'Hz'
-
-    ncycle = 16
-    nstep_cycle = 72
 
     # perodic patches
     periodic = {}
