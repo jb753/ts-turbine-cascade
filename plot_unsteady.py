@@ -15,6 +15,10 @@ probe_shape = [di, dj, 1]
 Dat_ps = probe.read_dat('output_2_probe_1_9.dat', probe_shape)
 Dat_ss = probe.read_dat('output_2_probe_1_8.dat', probe_shape)
 
+# The probe data are separate for each surface of the blade
+# A dictionary keyed by variable name
+# With numpy arrays with indexes [streamwise, spanwise, pitchwise, timewise]
+
 # Get secondary vars
 rpm = g.get_bv('rpm',1)
 cp = g.get_av('cp')
