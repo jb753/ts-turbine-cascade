@@ -941,7 +941,6 @@ def row_mesh(xy, rm, Dr, dx, s):
     else:
         x_dwn[-1] = xTE+dx[1]
 
-    # Relax clustering away from blade
     rt_up = np.ones_like(x_up) * xy[1,0]
     rt_dwn = np.ones_like(x_dwn) * xy[1,-1]
 
@@ -959,12 +958,22 @@ def row_mesh(xy, rm, Dr, dx, s):
         # np.linspace(0.,dx[1],nxd)[1:]+0.5*cx+xy[0,-1]))
         ))
     ni = len(xv)
-    xi = np.array([xy[0,0]-dx[0],xy[0,0],xy[0,-1],xy[0,-1]+dx[1]])
+    # xi = np.array([xy[0,0]-dx[0],xy[0,0],xy[0,-1],xy[0,-1]+dx[1]])
+    xi = np.array([xy[0,0],xLE,xTE,xy[0,-1]])
     ri = np.array([rm[0], rm[0], rm[1], rm[1]])
     Dri = np.array([Dr[0], Dr[0], Dr[1], Dr[1]])
     rmv = np.interp(xv, xi, ri)
     r1v = rmv - np.interp(xv, xi, Dri)*0.5
     r2v = rmv + np.interp(xv, xi, Dri)*0.5
+
+    facrel = np.array([1.,0.,0.,1.])
+    relv = np.interp(xv,xi,facrel)
+
+    # f,a = plt.subplots()
+    # a.plot(xi,facrel,'k-x')
+    # a.plot(xv, relv,'b-x')
+    # plt.show()
+
 
     rt1v = xy[1,:]
     rt2v = xy[2,:] + s
@@ -981,7 +990,10 @@ def row_mesh(xy, rm, Dr, dx, s):
 
 
     # Cosine pitch distribution
-    xhat = 0.5*(1.-np.cos(np.pi * np.linspace(1.,0.,nk)))
+    xclu = 0.5*(1.-np.cos(np.pi * np.linspace(1.,0.,nk)))
+
+    # Uniform pitch distribution
+    xunif = np.linspace(1.,0.,nk)
 
     # Preallocate and loop over i-lines
     sz = (ni, nj, nk)
@@ -991,6 +1003,7 @@ def row_mesh(xy, rm, Dr, dx, s):
     for i in range(ni):
         x[i,...] = xv[i]
         rnow = np.tile(np.linspace(r1v[i],r2v[i],nj),(nk,1)).T
+        xhat = relv[i] * xunif + (1. - relv[i])*xclu
         rtmnow = np.atleast_2d(xhat * rt1v[i] + (1.-xhat)*rt2v[i])
         rtnow = rtmnow / rmv[i] * rnow
         r[i,...] = rnow
@@ -1374,7 +1387,7 @@ def generate(fname, phi, psi, Lam, Ma, eta, gap_chord ):
 
     g.set_av("restart", ts_tstream_type.int, 0)
     g.set_av("poisson_restart", ts_tstream_type.int, 0)
-    g.set_av("poisson_nstep", ts_tstream_type.int, 20000)
+    g.set_av("poisson_nstep", ts_tstream_type.int, 10000)
     g.set_av("ilos", ts_tstream_type.int, 1)
     g.set_av("nlos", ts_tstream_type.int, 5)
     g.set_av("nstep", ts_tstream_type.int, 16000)
@@ -1420,4 +1433,5 @@ def generate(fname, phi, psi, Lam, Ma, eta, gap_chord ):
         g.set_bv("rpmk2", ts_tstream_type.float, bid, rpm)
 
     g.write_hdf5(fname)
+    print(Dr)
 

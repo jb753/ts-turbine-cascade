@@ -43,7 +43,7 @@ if __name__ == "__main__":
     freq = rpm / 60. * (sect * dup).max()
     print 'frequency', freq, 'Hz'
 
-    nper = 10
+    ncycle = 16
     nstep_cycle = 72
 
     # perodic patches
@@ -62,7 +62,7 @@ if __name__ == "__main__":
             )
 
     # variables for unsteady run
-    g2.set_av("ncycle", ts_tstream_type.int, nper)
+    g2.set_av("ncycle", ts_tstream_type.int, ncycle)
     g2.set_av("frequency", ts_tstream_type.float,  freq)
 
     g2.set_av("nstep_cycle", ts_tstream_type.int, nstep_cycle)
@@ -72,7 +72,7 @@ if __name__ == "__main__":
     g2.set_av("nstep_save", ts_tstream_type.int, 999999)
 
     # start averaging two periods before the end
-    g2.set_av("nstep_save_start", ts_tstream_type.int, (nper-2)*nstep_cycle)
+    g2.set_av("nstep_save_start", ts_tstream_type.int, (ncycle-2)*nstep_cycle)
 
     # save probes every time step, from the beginning
     g2.set_av("nstep_save_probe", ts_tstream_type.int, 1)
@@ -85,6 +85,7 @@ if __name__ == "__main__":
 
     # g2.set_av("sfin",ts_tstream_type.float,0.5)
     # g2.set_av("facsecin",ts_tstream_type.float,0.005)
+    g2.set_av("dampin",ts_tstream_type.float,10.0)
 
     # use mixing lengths and flow guess from steady calculation
     g2.set_av("restart", ts_tstream_type.int, 1)

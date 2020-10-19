@@ -34,4 +34,24 @@ and view it in the terminal using `less log_1.txt`.
 python plot.py
 ```
 
+6. To create an unsteady CFD from the converged steady solution model, use
+```
+python convert_unsteady.py
+```
+
+7. Run Turbostream on the unsteady input file,
+```
+mpirun -npernode 1 -np 1 turbostream input_2.hdf5 output_2 1 > log_2.txt &
+```
+
+8. Turbostream writes out a probe hdf5 file every time step, but we do not need them, so use this command to clear them up,
+```
+./clean_probes.sh
+```
+
+9. Finally, read the unsteady data and plot using,
+```
+python plot_unsteady.py
+```
+
 JB Oct 2020
