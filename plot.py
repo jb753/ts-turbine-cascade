@@ -24,9 +24,6 @@ ni = [blki.ni for blki in blk]
 nj = [blki.nj for blki in blk]
 nk = [blki.nk for blki in blk]
 jmid = [int((njn+1)/2) for njn in nj]
-print(ni)
-print(nj)
-print(nk)
 
 # Locate leading and trailing edges
 ile = []
