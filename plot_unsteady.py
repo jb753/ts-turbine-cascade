@@ -17,7 +17,7 @@ bid_probe = 1  # Block ID where probes are located
 
 #
 # This next section contains code to read in the data and process it into a
-# convenient form.
+# convenient form. Only a vague undestanding of this section is needed.
 #
 
 # Load the grid 
@@ -143,4 +143,22 @@ plt.ylabel(
 plt.tight_layout()  # Remove extraneous white space
 plt.show()  # Render the plot
 plt.savefig('ro_x.pdf')  # Write out a pdf file
+
+#
+# Other things to try
+#
+#   See https://numpy.org/doc/stable/ for documentation on Numpy
+#
+#   * Frequency spectrum of unsteady pressure at a point, use the Fast
+#   Fourier Transform function np.fft.fft( pressure, axis=?) to get Fourier
+#   coefficients for a series expansion in time. Get frequencies for the bins
+#   using np.fft.fftfreq( len(pressure) , dt)
+#   * Time-mean pressure distribution on pressure and suction sides using
+#   np.mean with the correct axis argument
+#   * Minimum and maximum pressure at each axial location. Use function
+#   np.amax( pressure, axis=? ) to take the maximum value over one index (time)
+#   There is a counterpart np.amin
+#   * Vary the Mach number in `make_design.py` and compare the above for
+#   different Mach numbers
+
 

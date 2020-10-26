@@ -1,6 +1,7 @@
 """
 This file contains methods to produce a Turbostream input file given a set of
-design parameters. It should not need to be changed.
+design parameters. It should not need to be changed and it is not neccesary to
+understand what goes on below.
 """
 import scipy.optimize, scipy.integrate
 import compflow as cf

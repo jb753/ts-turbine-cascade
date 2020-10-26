@@ -1,21 +1,32 @@
-import numpy as np
+"""This script reads a steady TS solution and creates an unsteady input file."""
+import numpy as np  # Multidimensional array library
+# Load some TS librays
 from ts import ts_tstream_reader, ts_tstream_steady_to_unsteady, ts_tstream_type
 from ts import ts_tstream_load_balance, ts_tstream_patch_kind
 
 if __name__ == "__main__":
-    
-    # Number of cycles to run for
+
+    # Number of rotor blade passing periods to run for
+    # Change me so that the computaion reaches a periodic state
     ncycle = 16
 
-    # Time steps per cycle
+    # Time steps per cycle - leave at 72
     nstep_cycle = 72
 
-    # File name of steady soln
+    # File name of the steady soln to read in
     fname = "output_1.hdf5"
+
+    # File name of the new unsteady input file to write out
+    fname_out = "input_2.hdf5"
+
+
 
     #
     # Should not need to change below this line
+    # It is complicated and not neccesary to understand the below!
     #
+
+
 
     # Read in the converged steady solution
     tsr = ts_tstream_reader.TstreamReader()
@@ -134,4 +145,4 @@ if __name__ == "__main__":
     g2.set_av("if_ale", ts_tstream_type.int, 0)
 
     # write out unsteady input file
-    g2.write_hdf5("input_2.hdf5")
+    g2.write_hdf5(fname_out)

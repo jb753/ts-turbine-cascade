@@ -189,7 +189,7 @@ plt.contourf(x_b2b_rotor, rt_b2b_rotor, Cp_b2b_rotor, lev)
 plt.contourf(x_b2b_stator,
         rt_b2b_stator+pitch[bid_stator]/cx[bid_stator], Cp_b2b_stator, lev)
 plt.contourf(x_b2b_rotor, rt_b2b_rotor+pitch[bid_rotor]/cx[bid_rotor], Cp_b2b_rotor, lev)
-plt.grid('off')
+plt.grid(False)
 plt.title('Static Pressure Coefficient, $C_p$')
 plt.xlabel(r'Axial Coordinate, $x/c_x$')
 plt.ylabel(r'Pitchwise Coordinate, $r\theta/c_x$')

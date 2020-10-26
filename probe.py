@@ -1,3 +1,4 @@
+"""This file contains functions for reading TS probe data."""
 import numpy as np
 
 def read_dat(fname, shape):
