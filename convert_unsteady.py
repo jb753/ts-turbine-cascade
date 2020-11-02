@@ -13,13 +13,17 @@ if __name__ == "__main__":
     # Time steps per cycle - leave at 72
     nstep_cycle = 72
 
+    # Which time step to start saving probes
+    nstep_save_start =  (ncycle-3)*nstep_cycle
+
+    # Number of time steps between probes
+    nstep_save_probe = 9
+
     # File name of the steady soln to read in
     fname = "output_1.hdf5"
 
     # File name of the new unsteady input file to write out
     fname_out = "input_2.hdf5"
-
-
 
     #
     # Should not need to change below this line
@@ -141,12 +145,11 @@ if __name__ == "__main__":
     g2.set_av("nstep_save", ts_tstream_type.int, 999999)
 
     # Save probes for last few period
-    nstep_save_start =  (ncycle-3)*nstep_cycle
     g2.set_av("nstep_save_start", ts_tstream_type.int, nstep_save_start)
     g2.set_av("nstep_save_start_probe", ts_tstream_type.int, nstep_save_start)
 
     # save probes every  nth step, from the beginning
-    g2.set_av("nstep_save_probe", ts_tstream_type.int, 9)
+    g2.set_av("nstep_save_probe", ts_tstream_type.int, nstep_save_probe)
 
     # other configuration variables
     g2.set_av("dts_conv", ts_tstream_type.float, 0.0005)

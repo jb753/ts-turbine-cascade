@@ -26,7 +26,6 @@ g = tsr.read(output_file_name + '.hdf5')
 # Store all probe patches in a list
 Dat = []
 for i in range(len(bid_probe)):
-
     bpi = bid_probe[i]
     ppi = pid_probe[i]
 
