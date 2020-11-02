@@ -858,7 +858,7 @@ class Stage:
         return d
 
 def blade_section(chi):
-    """Makes a simple blade geometry from one-dimensional flow parameters."""
+    """Makes a simple blade geometry from flow angles."""
     # Copy defaults from MEANGEN (Denton)
     tle     = 0.04 # LEADING EDGE THICKNESS/AXIAL CHORD.
     tte     = 0.04 # TRAILING EDGE THICKNESS/AXIAL CHORD.
@@ -909,7 +909,7 @@ def blade_section(chi):
     return xy
 
 def row_mesh(xy, rm, Dr, dx, s):
-    """Generate mesh for a blade row"""
+    """Generate H-mesh for a blade row from surface coords, radii."""
 
     nxd = 20
     nxu = 100
@@ -1022,7 +1022,7 @@ def row_mesh(xy, rm, Dr, dx, s):
 
 
 def add_to_grid(g, x, r, rt, bid):
-
+    """From mesh coordinates, add a block with patches to TS grid object"""
     ni, nj, nk = np.shape(x)
 
     # Permute the coordinates into C-style ordering
