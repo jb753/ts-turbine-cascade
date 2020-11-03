@@ -41,8 +41,12 @@ StageParams = [
     'chi',  # Metal angles for stator in, out, rotor in, out
     'Ax_Axin',  # Normalised areas
     'U_cpToin',  # Non-dimensional blade speed
-    'PR',  # Stagnation pressure ratio
+    'Po_Poin',  # Stagnation pressure ratio
+    'To_Toin',  # Stagnation pressure ratio
+    'PR',  # Stagnation temperature ratio
     'TR',  # Stagnation temperature ratio
+    'Ma_all',
+    'Al_all',
     'eta',  # Polytropic efficiency
     'Vx_rat',  # Axial velocity ratios w.r.t. rotor inlet
     'rm_rat',  # Mean radius ratios w.r.t. rotor inlet
@@ -221,6 +225,10 @@ def nondim_stage_from_Al(
         chi=chi,
         Ax_Axin=Dr_Drin,
         U_cpToin=U_cpToin,
+        Po_Poin=Po_Poin,
+        To_Toin=To_Toin,
+        Ma_all=Ma_all,
+        Al_all=Al_all,
         PR=PR,
         TR=TR,
         eta=eta,
@@ -245,10 +253,14 @@ def nondim_stage_from_Lam(
 
     # Inner function
     def iter_Al(x):
-        stg_now = nondim_stage_from_Al(phi=phi, psi=psi, Al=[Alin, x],
-                                       Ma=Ma, ga=ga, eta=eta,
-                                       Vx_rat=Vx_rat)
-        return stg_now.Lam - Lam
+        try:
+            stg_now = nondim_stage_from_Al(phi=phi, psi=psi, Al=[Alin, x],
+                                        Ma=Ma, ga=ga, eta=eta,
+                                        Vx_rat=Vx_rat)
+            return stg_now.Lam - Lam
+        except ValueError:
+            return np.nan
+
 
     # First pass map out a coarse reaction graph
     Al_guess = np.linspace(-89.,89.0,20)
@@ -1176,6 +1188,64 @@ def add_to_grid(g, x, r, rt, bid):
             else:
                 g.set_bv(name, ts_tstream_type.float, bid, val)
 
+def guess_block(g, bid, x, Po, To, Ma, Al, ga, cp, cv, rgas):
+
+    b = g.get_block(bid)
+    ni, nj, nk = (b.ni, b.nj, b.nk)
+    xb = g.get_bp('x', bid)
+    rb = g.get_bp('r', bid)
+
+    # Interpolate guess to block coords
+    Pob = np.interp(xb, x, Po)
+    Tob = np.interp(xb, x, To)
+    Mab = np.interp(xb, x, Ma)
+    Alb = np.interp(xb, x, Al)
+
+    # Get velocities
+    Vb = cf.from_Ma('V_cpTo', Mab, ga) * np.sqrt(cp * Tob)
+    Vxb = Vb * np.cos(np.radians(Alb))
+    Vtb = Vb * np.sin(np.radians(Alb))
+    Vrb = np.zeros_like(Vb)
+
+    # Static pressure and temperature
+    Pb = Pob / cf.from_Ma('Po_P', Mab, ga)
+    Tb = Tob / cf.from_Ma('To_T', Mab, ga)
+
+    # Density
+    rob = Pb / rgas / Tb
+
+    # Energy
+    eb = cv*Tb + (Vb**2.)/2
+
+    # Primary vars
+    rovxb = rob * Vxb
+    rovrb = rob * Vrb
+    rorvtb = rob * rb * Vtb
+    roeb = rob * eb
+
+    # Permute the coordinates into C-style ordering
+    robp = np.zeros((nk, nj, ni), np.float32)
+    rovxbp = np.zeros((nk, nj, ni), np.float32)
+    rovrbp = np.zeros((nk, nj, ni), np.float32)
+    rorvtbp = np.zeros((nk, nj, ni), np.float32)
+    roebp = np.zeros((nk, nj, ni), np.float32)
+    for k in range(nk):
+        for j in range(nj):
+            for i in range(ni):
+                robp[k,j,i] = rob[k,j,i]
+                rovxbp[k,j,i] = rovxb[k,j,i]
+                rovrbp[k,j,i] = rovrb[k,j,i]
+                rorvtbp[k,j,i] = rorvtb[k,j,i]
+                roebp[k,j,i] = roeb[k,j,i]
+
+    # Apply to grid
+    g.set_bp("ro", ts_tstream_type.float, bid, robp)
+    g.set_bp("rovx", ts_tstream_type.float, bid, rovxbp)
+    g.set_bp("rovr", ts_tstream_type.float, bid, rovrbp)
+    g.set_bp("rorvt", ts_tstream_type.float, bid, rorvtbp)
+    g.set_bp("roe", ts_tstream_type.float, bid, roebp)
+
+
 # if __name__ == "__main__":
 
 def generate(fname, phi, psi, Lam, Ma, eta, gap_chord ):
@@ -1184,6 +1254,7 @@ def generate(fname, phi, psi, Lam, Ma, eta, gap_chord ):
     gamma = 1.4
     rgas = 287.14
     cp = gamma / (gamma - 1.0) * rgas
+    cv = cp/gamma
 
     # Generate a stage in non-dimensional form
     nd_stage = nondim_stage_from_Lam(
@@ -1270,13 +1341,43 @@ def generate(fname, phi, psi, Lam, Ma, eta, gap_chord ):
     a.axis('equal')
     plt.show()
 
+    # Assemble guess
+    xg = np.array([-1., xy_stator[0,0],  xy_stator[0,-1],
+                        xy_rotor[0,0],  xy_rotor[0,-1], 1.])
+    Pog = np.array(nd_stage.Po_Poin) * Poin
+    Pog = np.insert(Pog, [0, 1], [Pog[0], Pog[1]])
+    Pog = np.append(Pog, Pog[-1])
 
+    Tog = np.array(nd_stage.To_Toin) * Toin
+    Tog = np.insert(Tog, [0, 1], [Tog[0], Tog[1]])
+    Tog = np.append(Tog, Tog[-1])
+
+    Mag = np.array(nd_stage.Ma_all)
+    Mag = np.insert(Mag, [0, 1], [Mag[0], Mag[1]])
+    Mag = np.append(Mag, Mag[-1])
+
+    Alg = np.array(nd_stage.Al_all)
+    Alg = np.insert(Alg, [0, 1], [Alg[0], Alg[1]])
+    Alg = np.append(Alg, Alg[-1])
+
+    print(np.shape(xg))
+    print(np.shape(Mag))
+    print(Mag)
+
+    # f,a = plt.subplots(4,1)
+    # a[0].plot(xg,Pog,'k-x')
+    # a[1].plot(xg,Tog,'k-x')
+    # a[2].plot(xg,Mag,'k-x')
+    # a[3].plot(xg,Alg,'k-x')
+    # plt.show()
 
     g = ts_tstream_grid.TstreamGrid()
     # g = None
     add_to_grid(g, xs, rs, rts, 0)
     add_to_grid(g, xr, rr, rtr, 1)
 
+    for bid in [0,1]:
+        guess_block(g, bid, xg, Pog, Tog, Mag, Alg, gamma, cp, cv, rgas)
 
     # Inlet
     ni, nj, nk = np.shape(xs)
@@ -1386,7 +1487,7 @@ def generate(fname, phi, psi, Lam, Ma, eta, gap_chord ):
         g.set_bv("fmgrid", ts_tstream_type.float, bid, 0.2)
         g.set_bv("poisson_fmgrid", ts_tstream_type.float, bid, 0.05)
 
-    g.set_av("restart", ts_tstream_type.int, 0)
+    g.set_av("restart", ts_tstream_type.int, 1)
     g.set_av("poisson_restart", ts_tstream_type.int, 0)
     g.set_av("poisson_nstep", ts_tstream_type.int, 10000)
     g.set_av("ilos", ts_tstream_type.int, 1)
@@ -1404,18 +1505,21 @@ def generate(fname, phi, psi, Lam, Ma, eta, gap_chord ):
     g.set_av("viscosity_law", ts_tstream_type.int, 1)
 
     # initial guess
+
     Vguess = Vref * np.cos(Alr_sta[1])
     Pinguess = [Poin, np.mean([Poin,Pout])]
     Poutguess = [np.mean([Poin,Pout]), Pout]
     Toguess = [Toin,Toin*0.8]
     for bid in g.get_block_ids():
-        g.set_bv("ftype", ts_tstream_type.int, bid, 5)
-        g.set_bv("vgridin", ts_tstream_type.float, bid, Vguess)
-        g.set_bv("vgridout", ts_tstream_type.float, bid, Vguess)
-        g.set_bv("pstatin", ts_tstream_type.float, bid, Pinguess[bid])
-        g.set_bv("pstatout", ts_tstream_type.float, bid, Poutguess[bid])
-        g.set_bv("tstagin", ts_tstream_type.float, bid, Toguess[bid])
-        g.set_bv("tstagout", ts_tstream_type.float, bid, Toguess[bid])
+
+        # g.set_bv("ftype", ts_tstream_type.int, bid, 5)
+        # g.set_bv("vgridin", ts_tstream_type.float, bid, Vguess)
+        # g.set_bv("vgridout", ts_tstream_type.float, bid, Vguess)
+        # g.set_bv("pstatin", ts_tstream_type.float, bid, Pinguess[bid])
+        # g.set_bv("pstatout", ts_tstream_type.float, bid, Poutguess[bid])
+        # g.set_bv("tstagin", ts_tstream_type.float, bid, Toguess[bid])
+        # g.set_bv("tstagout", ts_tstream_type.float, bid, Toguess[bid])
+
         g.set_bv("xllim_free", ts_tstream_type.float, bid, 0.0)
         g.set_bv("free_turb", ts_tstream_type.float, bid, 0.0)
 
