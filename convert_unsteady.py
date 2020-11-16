@@ -8,10 +8,11 @@ if __name__ == "__main__":
 
     # Number of rotor blade passing periods to run for
     # Change me so that the computaion reaches a periodic state
-    ncycle = 16
+    ncycle = 12
 
-    # Time steps per cycle - leave at 72
-    nstep_cycle = 72
+    # Time steps per cycle 
+    # Increased a bit because usually have fewer rotor blades
+    nstep_cycle = 96
 
     # Which time step to start saving probes
     nstep_save_start =  (ncycle-3)*nstep_cycle
@@ -24,6 +25,9 @@ if __name__ == "__main__":
 
     # File name of the new unsteady input file to write out
     fname_out = "input_2.hdf5"
+
+    # Put blade-to-blade probes on vane?
+    vane_b2b_probe = True
 
     #
     # Should not need to change below this line
@@ -38,7 +42,12 @@ if __name__ == "__main__":
     bids = g.get_block_ids()
 
     # add blade-to-blade probe patches
-    for bid in [1]:
+    if vane_b2b_probe:
+        bid_b2b = [0, 1]
+    else:
+        bid_b2b = [1]
+
+    for bid in bid_b2b:
         b = g.get_block(bid)
         jmid = int(b.nj/2)
         p = ts_tstream_type.TstreamPatch()
@@ -87,15 +96,13 @@ if __name__ == "__main__":
     print 'Scaled blade counts', dup
     print 'Scaling factors', scale
 
-    # set frequency (e.g. rotor blade passing frequency) - CHECK
+    # set frequency 
     rpm = g.get_bv('rpm',bids[-1])
-    freq = rpm / 60. * (sect * dup).max()
+    freq = rpm / 60. * (sect * dup)[0]
     print 'frequency', freq, 'Hz'
 
     # perodic patches
     periodic = {}
-    # periodic[(0,0)] = (0,1)
-    # periodic[(0,2)] = (0,3)
     periodic[0] = (0,0)
     periodic[1] = (0,2)
     periodic[2] = (1,0)

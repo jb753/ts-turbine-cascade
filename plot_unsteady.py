@@ -13,7 +13,6 @@ output_file_name = 'output_2'  # Location of TS output file
 # We identify a region of the grid using block and patch IDs
 pid_probe_ps = 9  # Patch ID of probe on pressure side
 pid_probe_ss = 10  # Patch ID of probe on suction side
-bid_probe = 5  # Block ID where probes are located
 
 #
 # This next section contains code to read in the data and process it into a
@@ -23,6 +22,15 @@ bid_probe = 5  # Block ID where probes are located
 # Load the grid 
 tsr = ts_tstream_reader.TstreamReader()
 g = tsr.read(output_file_name + '.hdf5')
+
+# Determine number of blades in each row
+bids = [0,g.get_nb()-1]
+fracann = np.array([g.get_bv('fracann',bi) for bi in bids])
+nblade = np.array([g.get_bv('nblade',bi) for bi in bids])
+nb_row = np.round(fracann * nblade)
+
+bid_probe = int(nb_row[0]+1)  # Block ID where probes are located
+
 
 # Determine the number of grid points on probe patches
 # (We index the TS grid using i = streamwise, j = spanwise, k = pitchwise)
@@ -99,7 +107,6 @@ a.plot(ft,P_hat,'-')  # Plot our data as a new line
 plt.xlabel('Time, Rotor Periods, $ft$')  # Horizontal axis label
 plt.ylabel('Static Pressure, $p/\overline{p}$')  # Vertical axis label
 plt.tight_layout()  # Remove extraneous white space
-plt.show()  # Render the plot
 plt.savefig('unsteady_P.pdf')  # Write out a pdf file
 
 #
@@ -141,9 +148,9 @@ plt.xlabel('Axial Chord Fraction, $\hat{x}$')  # Horizontal axis label
 plt.ylabel(
         r'Static Pressure')
 plt.tight_layout()  # Remove extraneous white space
-plt.show()  # Render the plot
 plt.savefig('P_x.pdf')  # Write out a pdf file
 
+plt.show()  # Render the plots
 #
 # Other things to try
 #

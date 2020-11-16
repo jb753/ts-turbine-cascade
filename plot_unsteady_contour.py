@@ -10,24 +10,29 @@ from ts import ts_tstream_reader, ts_tstream_cut  # TS grid reader
 
 output_file_name = 'output_2'  # Location of TS output file
 
-# We identify a region of the grid using block and patch IDs
-bid_probe = [4, 5, 6, 7 ,8]  # Block ID of probes
-pid_probe = [8, 8, 8, 8, 8]   # Patch ID of probes
-
-#
-# This next section contains code to read in the data and process it into a
-# convenient form. Only a vague undestanding of this section is needed.
-#
-
 # Load the grid 
 tsr = ts_tstream_reader.TstreamReader()
 g = tsr.read(output_file_name + '.hdf5')
+
+pid_probe = 8   # Patch ID of probes
+bid_probe = []
+for bid in g.get_block_ids():
+    try:
+        g.get_patch(bid, pid_probe)
+        bid_probe.append(bid)
+    except:
+        pass
+
+
+# This next section contains code to read in the data and process it into a
+# convenient form. Only a vague undestanding of this section is needed.
+#
 
 # Store all probe patches in a list
 Dat = []
 for i in range(len(bid_probe)):
     bpi = bid_probe[i]
-    ppi = pid_probe[i]
+    ppi = pid_probe
 
     print('Reading probe %d of %d' % (i+1, len(bid_probe)))
 
@@ -49,7 +54,8 @@ for i in range(len(bid_probe)):
     Dat.append(probe.read_dat(probe_name, probe_shape))
 
 # Here we extract some parameters from the TS grid to use later
-rpm = g.get_bv('rpm',1)  # RPM in rotor row
+rpm = g.get_bv('rpm',g.get_nb()-1)  # RPM in rotor row
+Omega = rpm / 60. * np.pi * 2.
 cp = g.get_av('cp')  # Specific heat capacity at const p
 ga = g.get_av('ga')  # Specific heat ratio
 rgas = cp * (1.-1./ga)
@@ -58,8 +64,9 @@ rgas = cp * (1.-1./ga)
 freq = g.get_av('frequency')  # Blade passing frequency
 ncycle = g.get_av('ncycle')  # Number of cycles
 nstep_cycle = g.get_av('nstep_cycle')  # Time steps per cycle
+nstep_save_probe = g.get_av('nstep_save_probe')  # Time steps per cycle
 # Individual time step in seconds = blade passing period / steps per cycle
-dt = 1./freq/float(nstep_cycle)
+dt = 1./freq/float(nstep_cycle) * float(nstep_save_probe)
 # Number of time steps = num cycles * steps per cycle
 # nt = ncycle * nstep_cycle
 nt = np.shape(Dat[0]['ro'])[-1]
@@ -101,15 +108,21 @@ _, P2 = rotor_outlet.area_avg_1d('pstat')
 _, T1 = rotor_inlet.area_avg_1d('tstat')
 _, T2 = rotor_outlet.area_avg_1d('tstat')
 
+
+# Angular movement per time step
+del_theta = Omega * dt
+# We must add this as an offset between the blade rows because the mesh is
+# moved to the next time step before the probes are written out!
+
 # Finished reading data, now make some plots
-#
+
 
 # Static pressure
 f,a = plt.subplots()  # Create a figure and axis to plot into
 plt.set_cmap('cubehelix')
 lev = np.linspace(-1.4,0.,21)
 # Loop over all blocks
-for Di in Dat:
+for i, Di in enumerate(Dat):
     # Indices
     # :, all x
     # 0, probe is at constant j
@@ -117,13 +130,19 @@ for Di in Dat:
     # -1, last time step
     xnow = Di['x'][:,0,:,-1]
     rtnow = Di['rt'][:,0,:,-1]
+    rnow = Di['r'][:,0,:,-1]
     Pnow = Di['pstat'][:,0,:,-1]
     Cpnow = (Pnow - Po1)/(Po1-P2)
+
+    # If this is a stator, offset backwards by del_theta
+    if not g.get_bv('rpm',bid_probe[i]):
+        tnow = rtnow / rnow + del_theta
+        rtnow = tnow * rnow
     a.contourf(xnow, rtnow, Cpnow, lev)
+
 a.axis('equal')
 plt.grid(False)
 plt.tight_layout()  # Remove extraneous white space
-plt.show()  # Render the plot
 plt.savefig('unst_Cp_cont.pdf')  # Write out a pdf file
 
 # Entropy
@@ -131,7 +150,7 @@ f,a = plt.subplots()  # Create a figure and axis to plot into
 plt.set_cmap('cubehelix_r')
 lev = np.linspace(-8.,25.0,21)
 # Loop over all blocks
-for Di in Dat:
+for i, Di in enumerate(Dat):
     # Indices
     # :, all x
     # 0, probe is at constant j
@@ -143,10 +162,14 @@ for Di in Dat:
     Tnow = Di['tstat'][:,0,:,-1]
     # Change in entropy relative to mean upstream state
     Dsnow = cp * np.log(Tnow/T1) - rgas*np.log(Pnow/P1)
+    # If this is a stator, offset backwards by del_theta
+    if g.get_bv('rpm',bid_probe[i])==0:
+        tnow = rtnow / rnow + del_theta
+        rtnow = tnow * rnow
     a.contourf(xnow, rtnow, Dsnow, lev)
 a.axis('equal')
 plt.grid(False)
 plt.tight_layout()  # Remove extraneous white space
-plt.show()  # Render the plot
 plt.savefig('unst_s_cont.pdf')  # Write out a pdf file
 
+plt.show()  # Render the plot
