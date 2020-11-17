@@ -1,8 +1,10 @@
-"""This script reads in an unsteady solution and graphs the results."""
+"""This script reads in an unsteady solution and runs the simple hole model."""
 import numpy as np  # Multidimensional array library
 import probe  # Code for reading TS probe output
+import model  # Simple hole model
 import matplotlib.pyplot as plt  # Plotting library
 from ts import ts_tstream_reader  # TS grid reader
+from ts import ts_tstream_cut  # TS cutter
 
 #
 # Set variables here
@@ -11,8 +13,10 @@ from ts import ts_tstream_reader  # TS grid reader
 output_file_name = 'output_2'  # Location of TS output file
 
 # We identify a region of the grid using block and patch IDs
-pid_probe_ps = 9  # Patch ID of probe on pressure side
-pid_probe_ss = 10  # Patch ID of probe on suction side
+pid_probe_ps = 9  # Patch ID of surface probe on pressure side
+pid_probe_ss = 10  # Patch ID of surface probe on suction side
+pid_probe_ps_free = 11  # Patch ID of free-stream probe on pressure side
+pid_probe_ss_free = 12  # Patch ID of free-stream probe on suction side
 
 #
 # This next section contains code to read in the data and process it into a
@@ -44,6 +48,8 @@ jmid = int(dj/2)
 # Assemble file names for the probes using % substitution
 probe_name_ps = output_file_name + '_probe_%d_%d.dat' % (bid_probe,pid_probe_ps)
 probe_name_ss = output_file_name + '_probe_%d_%d.dat' % (bid_probe,pid_probe_ss)
+probe_name_ps_free = output_file_name + '_probe_%d_%d.dat' % (bid_probe,pid_probe_ps_free)
+probe_name_ss_free = output_file_name + '_probe_%d_%d.dat' % (bid_probe,pid_probe_ss_free)
 
 # Read the probes
 # The probe data are separate dictionary for each surface of the blade The
@@ -54,6 +60,8 @@ probe_name_ss = output_file_name + '_probe_%d_%d.dat' % (bid_probe,pid_probe_ss)
 #   Dat_ps['ro'][:,jmid,0,n]
 Dat_ps = probe.read_dat(probe_name_ps, probe_shape)
 Dat_ss = probe.read_dat(probe_name_ss, probe_shape)
+Dat_ps_free = probe.read_dat(probe_name_ps_free, probe_shape)
+Dat_ss_free = probe.read_dat(probe_name_ss_free, probe_shape)
 
 # Here we extract some parameters from the TS grid to use later
 rpm = g.get_bv('rpm',1)  # RPM in rotor row
@@ -76,80 +84,88 @@ ft = np.linspace(0.,float(nt-1)*dt,nt) * freq
 # Get secondary vars, things like static pressure, rotor-relative Mach, etc.
 Dat_ps = probe.secondary(Dat_ps, rpm, cp, ga)
 Dat_ss = probe.secondary(Dat_ss, rpm, cp, ga)
+Dat_ps_free = probe.secondary(Dat_ps_free, rpm, cp, ga)
+Dat_ss_free = probe.secondary(Dat_ss_free, rpm, cp, ga)
+
+# Cut the rotor inlet
+Pdat = 1e5
+Tdat = 300.
+b = g.get_block(bid_probe)
+rotor_inlet = ts_tstream_cut.TstreamStructuredCut()
+rotor_inlet.read_from_grid(
+        g, Pdat, Tdat, bid_probe,
+        ist = 0, ien=1,  # First streamwise
+        jst = 0, jen=b.nj,  # All radial
+        kst = 0, ken=b.nk # All pitchwise
+        )
+
+# Get mass averaged rotor inlet relative stagnation conditions
+_, Po1 = rotor_inlet.mass_avg_1d('pstag_rel')
+_, To1 = rotor_inlet.mass_avg_1d('tstag_rel')
+
+#
+# Set up the simple hole model
+#
+
+# Choose a constant "pressure margin", or percentage increase of coolant
+# relative to the inlet stagnation condition
+PM = 0.01
+Poc = (1. + PM) * Po1
+
+# Fix a stagnation temperature ratio, i.e. the coolant is this much colder than
+# the main-stream inlet stagnation condition
+TR = 0.5
+Toc = TR * To1
+
+# Choose a hole position
+ihole_ps = 20
+ihole_ss = 40
+
+# Pull out data for model
+
+roinf = np.stack((Dat_ps_free['ro'][ihole_ps,jmid,0,:],
+                  Dat_ss_free['ro'][ihole_ss,jmid,0,:]))
+Vinf = np.stack((Dat_ps_free['vrel'][ihole_ps,jmid,0,:],
+                  Dat_ss_free['vrel'][ihole_ss,jmid,0,:]))
+Pinf = np.stack((Dat_ps_free['pstat'][ihole_ps,jmid,0,:],
+                  Dat_ss_free['pstat'][ihole_ss,jmid,0,:]))
+
+# Nondimensionalise data
+Pinf_Poc, roVinf_Po_cpToc = model.normalise(Poc, Toc, Pinf, roinf, Vinf, cp)
+
+# Assume constant Cd
+Cd = 0.7
+
+# Calculate BR
+BR = model.evaluate( Pinf_Poc, roVinf_Po_cpToc, Cd, ga )
 
 #
 # Finished reading data, now make some plots
 #
 
-#
-# Plot static pressure at mid-chord on pressure side edge as function of time
-#
-
-# Streamwise index at mid-chord = number of points in streamwise dirn / 2
-imid = int(di/2)
-
-# Get static pressure at coordinates of interest
-# i = imid for mid-chord axial location
-# j = jmid for mid-span radial location
-# k = 0 because the patch is at const pitchwise position, on pressure surface
-# n = : for all instants in time 
-P = Dat_ps['pstat'][0,jmid,0,:]
-
-# Divide pressure by mean value
-# P is a one-dimensional vector of values of static pressure at each instant in
-# time; np.mean is a function that returns the mean of an array
-P_hat = P / np.mean(P)
-
-# Generate the graph
-f,a = plt.subplots()  # Create a figure and axis to plot into
-a.plot(ft,P_hat,'-')  # Plot our data as a new line
-plt.xlabel('Time, Rotor Periods, $ft$')  # Horizontal axis label
-plt.ylabel('Static Pressure, $p/\overline{p}$')  # Vertical axis label
-plt.tight_layout()  # Remove extraneous white space
-plt.savefig('unsteady_P.pdf')  # Write out a pdf file
-
-#
-# Plot time-mean density on pressure side as function of axial location
-#
-
-# Generate the graph
+# Plot the hole position
 f,a = plt.subplots()  # Create a figure and axis to plot into
 
-# Get density at coordinates of interest
-# i = : for all axial locations
-# j = jmid for mid-span radial location 
-# k = 0 because the patch is at const pitchwise position, on pressure surface
-# n = : for all instants in time
-for Di in [Dat_ps, Dat_ss]:
-    P = Di['pstat'][:,jmid,0,:]
-
-    P_hat = P / np.mean(P,axis=1)[0]
-
-    # Get axial coordinates on pressure side 
-    # i = : for all axial locations
-    # j = jmid for mid-span radial location 
-    # k = 0 because the patch is at const pitchwise position, on pressure surface
-
-    # n = 0 for first time step, arbitrary because x is not a function of time.
-    x = Di['x'][:,jmid,0,0]
-
-    # Convert to axial chord fraction; use the array min and max functions to get
-    # the coordinates at leading and trailing edges respectively.
-    x_hat = (x - x.min())/(x.max() - x.min())
-
-    a.plot(x_hat,np.mean(P_hat,axis=1),'-k')  # Plot our data as a new line
-    a.plot(x_hat,np.min(P_hat,axis=1),'--k')  # Plot our data as a new line
-    a.plot(x_hat,np.max(P_hat,axis=1),'--k')  # Plot our data as a new line
-
-plt.xlabel('Axial Chord Fraction, $\hat{x}$')  # Horizontal axis label
-# Vertical axis label, start string with r so that \r is not interpreted as a
-# special escape sequence for carriage return
-plt.ylabel(
-        r'Static Pressure')
+x = Dat_ps['x'][:,jmid,0,0]
+rt_ps = Dat_ps['rt'][:,jmid,0,0]
+rt_ss = Dat_ss['rt'][:,jmid,0,0]
+a.plot(x,rt_ps,'-k')  # Blade pressure surface
+a.plot(x,rt_ss,'-k')  # Blade suction surface
+a.plot(x[ihole_ss],rt_ss[ihole_ss],'b*')  # SS hole location
+a.plot(x[ihole_ps],rt_ps[ihole_ps],'r*')  # PS hole location 
+plt.axis('equal')
+plt.axis('off')
 plt.tight_layout()  # Remove extraneous white space
-plt.savefig('P_x.pdf')  # Write out a pdf file
+plt.savefig('hole_posn.pdf')  # Write out a pdf file
+
+# Plot the Blowing ratios
+f,a = plt.subplots()  # Create a figure and axis to plot into
+a.plot(BR.T)
+plt.tight_layout()  # Remove extraneous white space
+plt.savefig('BR.pdf')  # Write out a pdf file
 
 plt.show()  # Render the plots
+quit()
 #
 # Other things to try
 #

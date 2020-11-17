@@ -34,8 +34,6 @@ if __name__ == "__main__":
     # It is complicated and not neccesary to understand the below!
     #
 
-
-
     # Read in the converged steady solution
     tsr = ts_tstream_reader.TstreamReader()
     g = tsr.read(fname)
@@ -123,7 +121,8 @@ if __name__ == "__main__":
     # add blade probe patches
     bid_pr = int(dup_int[0]+1)
     b = g2.get_block(bid_pr)
-    for k in [0, b.nk-1]:
+    dk_free = 12
+    for k in [0, b.nk-1, dk_free, b.nk-1-dk_free]:
         p = ts_tstream_type.TstreamPatch()
         p.kind = ts_tstream_patch_kind.probe
         p.bid = bid_pr

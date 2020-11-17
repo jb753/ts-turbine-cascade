@@ -1,5 +1,6 @@
 """Definitions for the simple film cooling hole model."""
 import compflow as cf  # Compressible flow relations
+import numpy as np
 
 def evaluate( Pinf_Poc, roVinf_Po_cpToc, Cd, ga ):
     """Evaluate blowing ratio using non-dimensional flow conditions.
@@ -20,6 +21,8 @@ def evaluate( Pinf_Poc, roVinf_Po_cpToc, Cd, ga ):
 
     # Blowing ratio
     BR = Cd * Qs / roVinf_Po_cpToc
+
+    return BR
 
 
 def normalise( Poc, Toc, Pinf, roinf, Vinf, cp ):
@@ -48,6 +51,4 @@ def normalise( Poc, Toc, Pinf, roinf, Vinf, cp ):
         Main-stream mass flux normalised by Poc/sqrt(cpToc) .
     """
 
-    return Pinf/Pox, roinf*Vinf/Poc*np.sqrt(cp * Toc)
-
-
+    return Pinf/Poc, roinf*Vinf/Poc*np.sqrt(cp * Toc)
