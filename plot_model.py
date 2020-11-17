@@ -72,8 +72,9 @@ ga = g.get_av('ga')  # Specific heat ratio
 freq = g.get_av('frequency')  # Blade passing frequency
 ncycle = g.get_av('ncycle')  # Number of cycles
 nstep_cycle = g.get_av('nstep_cycle')  # Time steps per cycle
+nstep_save_probe = g.get_av('nstep_save_probe')  # Time steps per cycle
 # Individual time step in seconds = blade passing period / steps per cycle
-dt = 1./freq/float(nstep_cycle)
+dt = 1./freq/float(nstep_cycle)*float(nstep_save_probe)
 # Number of time steps = num cycles * steps per cycle
 # nt = ncycle * nstep_cycle
 nt = np.shape(Dat_ps['ro'])[-1]
@@ -160,7 +161,9 @@ plt.savefig('hole_posn.pdf')  # Write out a pdf file
 
 # Plot the Blowing ratios
 f,a = plt.subplots()  # Create a figure and axis to plot into
-a.plot(BR.T)
+a.plot(ft, BR.T)
+a.set_ylabel('Hole Blowing Ratio, $BR$')
+a.set_xlabel('Time, Vane Periods')
 plt.tight_layout()  # Remove extraneous white space
 plt.savefig('BR.pdf')  # Write out a pdf file
 
