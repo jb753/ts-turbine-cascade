@@ -7,3 +7,5 @@ log_*.txt
 *.xdmf
 *.pdf
 *.dat
+*.png
+*.mp4

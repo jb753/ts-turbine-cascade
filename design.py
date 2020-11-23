@@ -1319,6 +1319,7 @@ def generate(fname, phi, psi, Lam, Ma, eta, gap_chord ):
 
     # Round to nearest whole number of blades
     nb = np.round(2. * np.pi * rm[0] / (s_c * cx))
+    print('nb = ',nb)
     s_c =  2. * np.pi * rm[0] /nb / cx
 
     xs, rs, rts = row_mesh(xy_stator, rm[:2], Dr[:2], [cx_vane * 3., gap/2.], s_c[0] * cx_vane)

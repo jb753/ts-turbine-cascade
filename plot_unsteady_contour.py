@@ -71,19 +71,18 @@ print(nstep_cycle)
 nstep_save_probe = g.get_av('nstep_save_probe')  # Time steps per cycle
 # Individual time step in seconds = blade passing period / steps per cycle
 dt = 1./freq/float(nstep_cycle)
+
 # Number of time steps = num cycles * steps per cycle
 # nt = ncycle * nstep_cycle
 nt = np.shape(Dat[0]['ro'])[-1]
 print(dt)
 # Make non-dimensional time vector = time in seconds * blade passing frequency
 
-# Get secondary vars, things like static pressure, rotor-relative Mach, etc.
-Dat = [probe.secondary(Di, rpm, cp, ga) for Di in Dat]
 
 # Arbitrary datum temperatures for entropy level
 Pdat=16e5
 Tdat=1600.
-bid_rotor = 5
+bid_rotor = g.get_nb()-1
 b_rotor = g.get_block(bid_rotor)
 
 # Get cuts at rotor inlet and exit to form Cp
@@ -111,10 +110,16 @@ _, P2 = rotor_outlet.area_avg_1d('pstat')
 _, T1 = rotor_inlet.area_avg_1d('tstat')
 _, T2 = rotor_outlet.area_avg_1d('tstat')
 
+rpms = [g.get_bv('rpm',b) for b in g.get_block_ids()]
+print(rpms)
+# Get secondary vars, things like static pressure, rotor-relative Mach, etc.
+Dat = [probe.secondary(Di, rpmi, cp, ga, P1, T1) for Di, rpmi in zip(Dat,rpms)]
+
+# Determine sector size
+dt_sector = 2. * np.pi * g.get_bv('fracann',0)
 
 # Angular movement per time step
-del_theta = Omega * dt*nstep_save_probe
-print(del_theta)
+dt_step = Omega * dt
 
 # We must add this as an offset between the blade rows because the mesh is
 # moved to the next time step before the probes are written out!
@@ -122,60 +127,18 @@ print(del_theta)
 # Finished reading data, now make some plots
 
 
-# Static pressure
-f,a = plt.subplots()  # Create a figure and axis to plot into
-plt.set_cmap('cubehelix')
-lev = np.linspace(-1.4,0.,21)
-# Loop over all blocks
-for i, Di in enumerate(Dat):
-    # Indices
-    # :, all x
-    # 0, probe is at constant j
-    # :, all rt
-    # -1, last time step
-    xnow = Di['x'][:,0,:,-1]
-    rtnow = Di['rt'][:,0,:,-1]
-    rnow = Di['r'][:,0,:,-1]
-    Pnow = Di['pstat'][:,0,:,-1]
-    Cpnow = (Pnow - Po1)/(Po1-P2)
-
-    # If this is a stator, offset backwards by del_theta
-    if not g.get_bv('rpm',bid_probe[i])==0.:
-        tnow = rtnow / rnow + del_theta
-        rtnow = tnow * rnow
-    a.contourf(xnow, rtnow, Cpnow, lev)
-
-a.axis('equal')
-plt.grid(False)
-plt.tight_layout()  # Remove extraneous white space
-plt.savefig('unst_Cp_cont.pdf')  # Write out a pdf file
-
-# Entropy
-f,a = plt.subplots()  # Create a figure and axis to plot into
-plt.set_cmap('cubehelix_r')
-lev = np.linspace(-8.,25.0,21)
-# Loop over all blocks
-for i, Di in enumerate(Dat):
-    # Indices
-    # :, all x
-    # 0, probe is at constant j
-    # :, all rt
-    # -1, last time step
-    xnow = Di['x'][:,0,:,-1]
-    rtnow = Di['rt'][:,0,:,-1]
-    rnow = Di['r'][:,0,:,-1]
-    Pnow = Di['pstat'][:,0,:,-1]
-    Tnow = Di['tstat'][:,0,:,-1]
-    # Change in entropy relative to mean upstream state
-    Dsnow = cp * np.log(Tnow/T1) - rgas*np.log(Pnow/P1)
-    # If this is a stator, offset backwards by del_theta
-    if not g.get_bv('rpm',bid_probe[i])==0:
-        tnow = rtnow / rnow
-        rtnow = (tnow -del_theta) * rnow
-    a.contourf(xnow, rtnow, Dsnow, lev)
-a.axis('equal')
-plt.grid(False)
-plt.tight_layout()  # Remove extraneous white space
-plt.savefig('unst_s_cont.pdf')  # Write out a pdf file
+for it in range(nt):
+    print('Rendering frame %d/%d'%(it,nt))
+    f,a = plt.subplots()  # Create a figure and axis to plot into
+    plt.set_cmap('cubehelix_r')
+    lev = np.linspace(-8.,35.0,21)
+    probe.render_frame(a, Dat,'ds', it, lev, Omega, dt*nstep_save_probe,nstep_cycle/nstep_save_probe, dt_sector)
+    plt.grid(False)
+    a.axis('equal')
+    a.axis('off')
+    a.set_ylim([0.,dt_sector*Dat[0]['r'][0,0,0,0]])
+    plt.tight_layout()  # Remove extraneous white space
+    plt.savefig('%d.png'%it,dpi=200)  
+    plt.close(f)
 
 plt.show()  # Render the plot
