@@ -119,7 +119,7 @@ if __name__ == "__main__":
     ien = p2.ist
 
     # add blade probe patches
-    bid_pr = int(dup_int[0]+1)
+    bid_pr = int(dup_int[0])
     b = g2.get_block(bid_pr)
     dk_free = 12
     for k in [0, b.nk-1, dk_free, b.nk-1-dk_free]:

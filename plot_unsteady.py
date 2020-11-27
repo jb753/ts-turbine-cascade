@@ -28,7 +28,7 @@ bids = [0,g.get_nb()-1]
 fracann = np.array([g.get_bv('fracann',bi) for bi in bids])
 nblade = np.array([g.get_bv('nblade',bi) for bi in bids])
 nb_row = np.round(fracann * nblade)
-bid_probe = int(nb_row[0]+1)  # Block ID where probes are located
+bid_probe = int(nb_row[0])  # Block ID where probes are located
 
 
 # Determine the number of grid points on probe patches
@@ -74,8 +74,9 @@ print(nt)
 ft = np.linspace(0.,float(nt-1)*dt,nt) * freq
 
 # Get secondary vars, things like static pressure, rotor-relative Mach, etc.
-Dat_ps = probe.secondary(Dat_ps, rpm, cp, ga)
-Dat_ss = probe.secondary(Dat_ss, rpm, cp, ga)
+P1, T1 = 1e5, 300.
+Dat_ps = probe.secondary(Dat_ps, rpm, cp, ga, P1, T1)
+Dat_ss = probe.secondary(Dat_ss, rpm, cp, ga, P1, T1)
 
 #
 # Finished reading data, now make some plots
