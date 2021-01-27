@@ -11,7 +11,9 @@ Tdat=1600.
 
 # Load the grid from hdf5 file
 tsr = ts_tstream_reader.TstreamReader()
-g = tsr.read("output_1.hdf5")
+g = tsr.read("output_1.hdf5",read_yplus=True)
+
+# yplus = g.get_bp('yplus',0)
 
 # Block ids
 bid_stator = 0
@@ -134,6 +136,8 @@ _, P3 = rotor_inlet.area_avg_1d('pstat')
 _, P4 = rotor_outlet.area_avg_1d('pstat')
 
 ga = g.get_av('ga')
+cp = g.get_av('cp')
+rgas = cp * (ga-1.)/ga
 _, Ma3 = rotor_inlet.mass_avg_1d('mach_rel')
 Po3 = P3 * cf.from_Ma('Po_P',Ma3,ga)
 
@@ -176,6 +180,9 @@ x_b2b_stator = stator_b2b.get_bp('x')/cx[bid_stator]
 rt_b2b_stator = stator_b2b.get_bp('rt')/cx[bid_stator]
 P_b2b_stator = stator_b2b.get_bp('pstat')
 Cp_b2b_stator = (P_b2b_stator - Po1)/(Po1 - P2)
+Pref=16e5
+Tref=1600.
+Yp_b2b_stator = (Po1 - stator_b2b.get_bp('pstag') ) /(Po1-P2)
 
 x_b2b_rotor = rotor_b2b.get_bp('x')/cx[bid_rotor]
 rt_b2b_rotor = rotor_b2b.get_bp('rt')/cx[bid_rotor]
@@ -196,3 +203,21 @@ plt.ylabel(r'Pitchwise Coordinate, $r\theta/c_x$')
 plt.tight_layout()
 
 plt.savefig('Cp_cont.pdf')
+
+
+# Entropy
+plt.figure(4)
+levYp = np.linspace(-0.01,0.25,27)
+cm = plt.contourf(x_b2b_stator, rt_b2b_stator, Yp_b2b_stator,levYp)
+plt.contourf(x_b2b_stator,
+        rt_b2b_stator+pitch[bid_stator]/cx[bid_stator], Yp_b2b_stator,levYp)
+plt.axis('equal')
+plt.colorbar(cm)
+plt.grid(False)
+plt.xlim((-0.5,1.5))
+plt.title('Static Pressure Coefficient, $C_p$')
+plt.xlabel(r'Axial Coordinate, $x/c_x$')
+plt.ylabel(r'Pitchwise Coordinate, $r\theta/c_x$')
+plt.tight_layout()
+
+plt.savefig('Yp_cont.pdf')

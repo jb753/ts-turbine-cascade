@@ -53,6 +53,9 @@ StageParams = [
 ]
 NonDimStage = namedtuple('NonDimStage', StageParams)
 
+nxd = 20
+nxu = 100
+
 def nondim_vane( Al, Ma_out, ga, Yp, rr, drr=None, const_Vx=None):
     """Generate a non-dimensional vane design."""
 
@@ -923,8 +926,6 @@ def blade_section(chi):
 def row_mesh(xy, rm, Dr, dx, s):
     """Generate H-mesh for a blade row from surface coords, radii."""
 
-    nxd = 20
-    nxu = 100
     nj = 5
     nk = 65
 
@@ -1033,7 +1034,7 @@ def row_mesh(xy, rm, Dr, dx, s):
     return x, r, rt
 
 
-def add_to_grid(g, x, r, rt, bid):
+def add_to_grid(g, x, r, rt, bid, slip_wall=False):
     """From mesh coordinates, add a block with patches to TS grid object"""
     ni, nj, nk = np.shape(x)
 
@@ -1172,6 +1173,42 @@ def add_to_grid(g, x, r, rt, bid):
     p4.kdir = 2
     p4.pid = g.add_patch(bid, p4)
 
+    if slip_wall:
+
+        # Slip wall on blade surf
+        psa = ts_tstream_type.TstreamPatch()
+        psa.kind = ts_tstream_patch_kind.slipwall
+        psa.bid = bid
+        psa.ist = ist
+        psa.ien = ien
+        psa.jst = 0
+        psa.jen = nj
+        psa.kst = 0
+        psa.ken = 1
+        psa.nxbid = 0
+        psa.nxpid = 0
+        psa.idir = 0
+        psa.jdir = 1
+        psa.kdir = 2
+        psa.pid = g.add_patch(bid, psa)
+
+        psb = ts_tstream_type.TstreamPatch()
+        psb.kind = ts_tstream_patch_kind.slipwall
+        psb.bid = bid
+        psb.ist = ist
+        psb.ien = ien
+        psb.jst = 0
+        psb.jen = nj
+        psb.kst = nk-1
+        psb.ken = nk
+        psb.nxbid = 0
+        psb.nxpid = 0
+        psb.idir = 0
+        psb.jdir = 1
+        psb.kdir = 2
+        psb.pid = g.add_patch(bid, psb)
+
+
     # Default avs
     for name in ts_tstream_default.av:
         val = ts_tstream_default.av[name]
@@ -1248,7 +1285,7 @@ def guess_block(g, bid, x, Po, To, Ma, Al, ga, cp, cv, rgas):
 
 # if __name__ == "__main__":
 
-def generate(fname, phi, psi, Lam, Ma, eta, gap_chord ):
+def generate(fname, phi, psi, Lam, Ma, eta, gap_chord, slip_vane ):
 
     # Constants
     gamma = 1.4
@@ -1374,7 +1411,7 @@ def generate(fname, phi, psi, Lam, Ma, eta, gap_chord ):
 
     g = ts_tstream_grid.TstreamGrid()
     # g = None
-    add_to_grid(g, xs, rs, rts, 0)
+    add_to_grid(g, xs, rs, rts, 0, slip_vane)
     add_to_grid(g, xr, rr, rtr, 1)
 
     for bid in [0,1]:
@@ -1505,6 +1542,7 @@ def generate(fname, phi, psi, Lam, Ma, eta, gap_chord ):
     g.set_av("viscosity", ts_tstream_type.float, muref)
     g.set_av("viscosity_law", ts_tstream_type.int, 1)
 
+    g.set_av("write_yplus", ts_tstream_type.int, 1)
     # initial guess
 
     Vguess = Vref * np.cos(Alr_sta[1])
