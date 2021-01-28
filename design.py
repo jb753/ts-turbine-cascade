@@ -7,7 +7,7 @@ import scipy.optimize, scipy.integrate
 import compflow as cf
 try:
     from ts import ts_tstream_grid, ts_tstream_type, ts_tstream_default
-    from ts import ts_tstream_patch_kind
+    from ts import ts_tstream_patch_kind, ts_tstream_reader
 except:
     pass
 import numpy as np
@@ -1066,11 +1066,13 @@ def add_to_grid(g, x, r, rt, bid, slip_wall=False):
     theta = rt/r
     dt = theta[:,0,-1] - theta[:,0,0]
     t_pitch = dt[0]
-    ist = int(np.argmax(dt<t_pitch))
-    ien = ni - int(np.argmax(dt[::-1]<t_pitch))
-    print(dt.max())
-    print(dt.min())
-    print(ist,ien)
+    tol = 1e-6
+    ist = int(np.argmax(dt<t_pitch-tol))
+    ien = ni - int(np.argmax(dt[::-1]<t_pitch-tol))
+    print(dt.max(),dt.min())
+    print('t_pitch',t_pitch)
+    print('ist',ist)
+    print('ien',ien)
     print('ni',ni)
 
     # Periodic patches
@@ -1285,7 +1287,7 @@ def guess_block(g, bid, x, Po, To, Ma, Al, ga, cp, cv, rgas):
 
 # if __name__ == "__main__":
 
-def generate(fname, phi, psi, Lam, Ma, eta, gap_chord, slip_vane ):
+def generate(fname, phi, psi, Lam, Ma, eta, gap_chord, slip_vane, guess_file=None ):
 
     # Constants
     gamma = 1.4
@@ -1576,6 +1578,20 @@ def generate(fname, phi, psi, Lam, Ma, eta, gap_chord, slip_vane ):
         g.set_bv("rpmk1", ts_tstream_type.float, bid, rpm)
         g.set_bv("rpmk2", ts_tstream_type.float, bid, rpm)
 
+    # Load guess from file if provided
+    if guess_file is not None:
+        print("Loading guess from file...")
+        # Load grid
+        tsr1 = ts_tstream_reader.TstreamReader()
+        g1 = tsr1.read(guess_file)
+        # Variables to copy
+        varnames = ['ro','rovx','rovr','rorvt','roe']
+        # Loop over blocks in new design
+        for bid in g.get_block_ids():
+            for vi in varnames:
+                # Apply flow variables from guess to new grid
+                g.set_bp(vi, ts_tstream_type.float, bid, g1.get_bp(vi,bid) )
+
+
     g.write_hdf5(fname)
-    print(Dr)
 
