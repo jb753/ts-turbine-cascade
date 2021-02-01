@@ -11,7 +11,7 @@ Tdat=1600.
 
 # Load the grid from hdf5 file
 tsr = ts_tstream_reader.TstreamReader()
-g = tsr.read("output_1.hdf5",read_yplus=True)
+g = tsr.read("output_2.hdf5",read_yplus=True)
 
 # yplus = g.get_bp('yplus',0)
 
