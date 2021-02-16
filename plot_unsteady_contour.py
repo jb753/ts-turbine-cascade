@@ -2,7 +2,7 @@
 import numpy as np  # Multidimensional array library
 import probe  # Code for reading TS probe output
 import matplotlib.pyplot as plt  # Plotting library
-from ts import ts_tstream_reader, ts_tstream_cut  # TS grid reader
+from ts import ts_tstream_reader, ts_tstream_cut, ts_tstream_patch_kind  # TS grid reader
 
 #
 # Set variables here
@@ -14,14 +14,21 @@ output_file_name = 'output_2'  # Location of TS output file
 tsr = ts_tstream_reader.TstreamReader()
 g = tsr.read(output_file_name + '.hdf5')
 
-pid_probe = 8   # Patch ID of probes
-bid_probe = []
-for bid in g.get_block_ids():
+# Set the probe locations manually
+bid_probe = [0 ,  1,  2, 3, 4, 5, 6]
+pid_probe = [10, 10, 10, 8, 8, 8, 8]
+
+# Verify that these probes exist
+for bid, pid in zip(bid_probe,pid_probe):
     try:
-        g.get_patch(bid, pid_probe)
-        bid_probe.append(bid)
+        pnow = g.get_patch(bid, pid)
+        if not pnow.kind ==  ts_tstream_patch_kind.probe:
+            raise Exception()
     except:
-        pass
+        raise Exception(
+            "Probe patch bid=%d, pid=%d not found!\n"
+            "List the patches using `list_probes.py`, and try again."% (bid, pid)
+            )
 
 
 # This next section contains code to read in the data and process it into a
@@ -32,7 +39,7 @@ for bid in g.get_block_ids():
 Dat = []
 for i in range(len(bid_probe)):
     bpi = bid_probe[i]
-    ppi = pid_probe
+    ppi = pid_probe[i]
 
     print('Reading probe %d of %d' % (i+1, len(bid_probe)))
 

@@ -23,26 +23,13 @@ pid_probe_ss = 10  # Patch ID of probe on suction side
 tsr = ts_tstream_reader.TstreamReader()
 g = tsr.read(output_file_name + '.hdf5')
 
-# Print probe patch locations
-print('***')
-print('Printing available probe patches...')
-for bid in g.get_block_ids():
-    for pid in g.get_patch_ids(bid):
-        patch = g.get_patch(bid,pid)
-        if patch.kind == ts_tstream_patch_kind.probe:
-            rpm = g.get_bv('rpm',bid)
-            row_str = 'STATOR' if rpm==0 else 'ROTOR'
-            di = patch.ien- patch.ist
-            dj = patch.jen- patch.jst
-            dk = patch.ken- patch.kst
-            print('%s, bid=%d, pid=%d, di=%d, dj=%d, dk=%d' % (row_str, bid, pid, di, dj, dk))
-print('***')
-
 # Determine number of blades in each row
 bids = [0,g.get_nb()-1]
 fracann = np.array([g.get_bv('fracann',bi) for bi in bids])
 nblade = np.array([g.get_bv('nblade',bi) for bi in bids])
 nb_row = np.round(fracann * nblade)
+print(nblade)
+print(fracann)
 bid_probe = int(nb_row[0])  # Block ID where probes are located
 
 
