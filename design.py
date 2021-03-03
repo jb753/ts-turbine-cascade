@@ -923,6 +923,52 @@ def blade_section(chi):
 
     return xy
 
+def ERspace(ER, dx0, dx1, L):
+    """Expanding spacing."""
+
+    def ERguess(ER_adjust,N):
+
+        # work out how many points we need to hit Dmax
+        N1 = np.floor(1.+np.log(dx1/dx0)/np.log(ER_adjust)).astype(int)
+
+        # subtract from total
+        N2 = N-N1;
+
+        if N2<1:
+            return -np.inf, np.nan
+
+        # terms in expanding section
+        Dx0 = dx0*ER_adjust**np.arange(N1-1)
+
+        # terms in constant section
+        Dx1 = Dx0[-1]*np.ones((N2,))
+
+        # concatenate
+        D = np.concatenate((Dx0,Dx1))
+        yout = np.insert(np.cumsum(D),0,0)
+
+        # get total length
+        Lout = yout[-1];
+
+        return Lout-L, yout
+
+    # Get num points needed
+    for n in range(1000):
+        if ERguess(ER,n)[0]>0.:
+            break
+
+    # Now drop ER slightly 
+    err = np.inf
+    fac=1.0
+    while err > 0.:
+        fac = fac*0.99999
+        err = ERguess(ER*fac,n)[0]
+
+    y = ERguess(ER*fac,n)[1]
+    y[-1] = L
+
+    return y
+
 def row_mesh(xy, rm, Dr, dx, s):
     """Generate H-mesh for a blade row from surface coords, radii."""
 
@@ -937,21 +983,34 @@ def row_mesh(xy, rm, Dr, dx, s):
     cx = np.ptp(xy[0,:])
     x_up = -0.5 * (1. - np.cos(np.pi * np.linspace(-0.5,0.,50))) * cx + xy[0,0]
     x_dwn = 0.5 * (1. - np.cos(np.pi * np.linspace(0.,0.5,50))) * cx + xy[0,-1]
+    sp_max = np.diff(x_up).max()
 
     # Trim if needed
     x_up = x_up[x_up > (xLE-dx[0])]
     x_dwn = x_dwn[x_dwn < (xTE+dx[1])]
 
     # Extend if needed
-    if x_up[0] > (xLE - dx[0]):
-        nxu = int((x_up[0] - (xLE-dx[0]))/(x_up[1]-x_up[0]))
-        x_up = np.insert(x_up, 0, np.linspace(xLE-dx[0],x_up[0],nxu)[:-1])
+    ER = 1.2
+    exp_sp_max = 5. * sp_max
+    if x_up[0] - (xLE - dx[0]) > sp_max:
+        len_up = x_up[0]-(xLE-dx[0])
+        print('len_up',len_up)
+        add_up = x_up[0]-ERspace(ER,sp_max,exp_sp_max,len_up)[-1:0:-1]
+        print(add_up)
+        x_up = np.insert(x_up, 0, add_up, 0)
+        # nxu = int((x_up[0] - (xLE-dx[0]))/(x_up[1]-x_up[0]))
+        # x_up = np.insert(x_up, 0, np.linspace(xLE-dx[0],x_up[0],nxu)[:-1])
     else:
         x_up[0] = xLE-dx[0]
 
-    if x_dwn[-1] < (xTE + dx[1]):
-        nxd = int(-(x_dwn[-1] - (xTE+dx[1]))/(x_dwn[-1]-x_dwn[-2]))
-        x_dwn = np.append(x_dwn, np.linspace(x_dwn[-1],xTE+dx[1],nxd)[1:])
+    if (xTE + dx[1]) - x_dwn[-1] > sp_max:
+        len_dn = (xTE + dx[1]) - x_dwn[-1]
+        print('len_dn',len_dn)
+        add_dn = x_dwn[-1]+ERspace(ER,sp_max,exp_sp_max,len_dn)[1:]
+        print(add_dn)
+        x_dwn = np.append(x_dwn, add_dn)
+        # nxd = int(-(x_dwn[-1] - (xTE+dx[1]))/(x_dwn[-1]-x_dwn[-2]))
+        # x_dwn = np.append(x_dwn, np.linspace(x_dwn[-1],xTE+dx[1],nxd)[1:])
     else:
         x_dwn[-1] = xTE+dx[1]
 
@@ -1361,9 +1420,9 @@ def generate(fname, phi, psi, Lam, Ma, eta, gap_chord, slip_vane, guess_file=Non
     print('nb = ',nb)
     s_c =  2. * np.pi * rm[0] /nb / cx
 
-    xs, rs, rts = row_mesh(xy_stator, rm[:2], Dr[:2], [cx_vane * 3., gap/2.], s_c[0] * cx_vane)
+    xs, rs, rts = row_mesh(xy_stator, rm[:2], Dr[:2], [cx_vane * 7., gap/2.], s_c[0] * cx_vane)
 
-    xr, rr, rtr = row_mesh(xy_rotor, rm[2:], Dr[2:], [gap/2., cx_rotor * 3.], s_c[1] * cx_rotor)
+    xr, rr, rtr = row_mesh(xy_rotor, rm[2:], Dr[2:], [gap/2., cx_rotor * 7.], s_c[1] * cx_rotor)
 
     # Make the mixing planes coincident
     xm = 0.5 * (xs[-1,0,0] + xr[0,0,0])

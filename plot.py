@@ -11,7 +11,7 @@ Tdat=1600.
 
 # Load the grid from hdf5 file
 tsr = ts_tstream_reader.TstreamReader()
-g = tsr.read("output_2.hdf5",read_yplus=True)
+g = tsr.read("output_1.hdf5",read_yplus=True)
 
 # yplus = g.get_bp('yplus',0)
 
@@ -57,7 +57,7 @@ stator_inlet.read_from_grid(
 stator_outlet = ts_tstream_cut.TstreamStructuredCut()
 stator_outlet.read_from_grid(
         g, Pdat, Tdat, bid_stator,
-        ist = ni[bid_stator]-1, ien=ni[bid_stator],  # Last streamwise
+        ist = ni[bid_stator]-2, ien=ni[bid_stator]-1,  # Last streamwise
         jst = 0, jen=nj[bid_stator],  # All radial
         kst = 0, ken=nk[bid_stator]  # All pitchwise
         )
@@ -221,3 +221,25 @@ plt.ylabel(r'Pitchwise Coordinate, $r\theta/c_x$')
 plt.tight_layout()
 
 plt.savefig('Yp_cont.pdf')
+
+# Pitchwise profiles downstream of vane
+# Entropy
+rt_vane_pitch = np.mean(stator_outlet.get_bp('rt'),axis=1)
+V_vane_pitch = np.mean(stator_outlet.get_bp('vabs'),axis=1)
+P_vane_pitch = np.mean(stator_outlet.get_bp('pstat'),axis=1)
+
+plt.figure(5)
+plt.plot(rt_vane_pitch, V_vane_pitch,'k-x')
+plt.title('Pitchwise velocity profile')
+plt.xlabel(r'Vane pitch, $r\theta$')
+plt.ylabel(r'Velocity')
+plt.tight_layout()
+plt.savefig('pitch_V.pdf')
+
+plt.figure(6)
+plt.plot(rt_vane_pitch, P_vane_pitch,'k-x')
+plt.title('Pitchwise pressure profile')
+plt.xlabel(r'Vane pitch, $r\theta$')
+plt.ylabel(r'Pressure')
+plt.tight_layout()
+plt.savefig('pitch_P.pdf')

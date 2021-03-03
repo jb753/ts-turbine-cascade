@@ -45,6 +45,9 @@ def secondary(d, rpm, cp, ga, Pref, Tref):
     # Entropy change wrt reference
     d['ds'] = cp * np.log(d['tstat']/Tref) - rgas*np.log(d['pstat']/Pref)
 
+    # Pressure fluc wrt time mean
+    d['pfluc'] = d['pstat'] - np.mean(d['pstat'],3,keepdims=True)
+
     # Angular velocity
     d['omega'] = rpm / 60. * 2. * np.pi
 
@@ -58,14 +61,21 @@ def secondary(d, rpm, cp, ga, Pref, Tref):
 
     return d
 
-def render_frame(a, d, varname, it, lev, Omega, dt, nstep_cycle, sector_size):
+def render_frame(a, d, varname, it, lev, Omega, dt, nstep_cycle, sector_size, norm=None):
     """Plot out contours of a variable at time step it."""
 
     for i, di in enumerate(d):
         xnow = di['x'][:,0,:,it]
         rtnow = di['rt'][:,0,:,it]
         rnow = di['r'][:,0,:,it]
-        varnow = di[varname][:,0,:,it]
+        varnow = di[varname][:,0,:,it]+0.
+
+        if norm is not None:
+            varnow = (varnow - norm[0])/norm[1]
+            print(varnow.min())
+            print(varnow.max())
+
+        print(np.shape(varnow))
 
         # If this is a stator, offset backwards by del_theta
         if di['rpm']==0.:
@@ -73,5 +83,8 @@ def render_frame(a, d, varname, it, lev, Omega, dt, nstep_cycle, sector_size):
 
         # Duplicate plots so the screen is always full
         for ii in range(-2,6):
-            a.contourf(xnow, (rtnow/rnow + ii*sector_size)*rnow, varnow, lev)
+            if lev is None:
+                a.contourf(xnow, (rtnow/rnow + ii*sector_size)*rnow, varnow)
+            else:
+                a.contourf(xnow, (rtnow/rnow + ii*sector_size)*rnow, varnow, lev)
 

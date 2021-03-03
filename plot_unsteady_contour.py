@@ -14,9 +14,11 @@ output_file_name = 'output_2'  # Location of TS output file
 tsr = ts_tstream_reader.TstreamReader()
 g = tsr.read(output_file_name + '.hdf5')
 
+
 # Set the probe locations manually
-bid_probe = [0 ,  1,  2, 3, 4, 5, 6]
-pid_probe = [10, 10, 10, 8, 8, 8, 8]
+bid_probe = range(20)
+pid_probe = [10,]*9 + [8,]*11
+print(np.array([bid_probe,pid_probe]).astype(int))
 
 # Verify that these probes exist
 for bid, pid in zip(bid_probe,pid_probe):
@@ -109,7 +111,7 @@ rotor_outlet.read_from_grid(
         )
 
 # Pressure references
-_, Po1 = rotor_inlet.mass_avg_1d('pstag')
+_, Po1 = rotor_inlet.mass_avg_1d('pstag_rel')
 _, P1 = rotor_inlet.area_avg_1d('pstat')
 _, P2 = rotor_outlet.area_avg_1d('pstat')
 
@@ -133,13 +135,14 @@ dtheta_step = Omega * dt
 
 # Finished reading data, now make some plots
 
-
 for it in range(nt):
     print('Rendering frame %d/%d'%(it,nt))
     f,a = plt.subplots()  # Create a figure and axis to plot into
-    plt.set_cmap('cubehelix_r')
-    lev = np.linspace(-8.,35.0,21)
-    probe.render_frame(a, Dat,'ds', it, lev, Omega, dt*nstep_save_probe,nstep_cycle/nstep_save_probe, dtheta_sector)
+    plt.set_cmap('RdBu')
+    # plt.set_cmap('cubehelix_r')
+    # lev = np.linspace(-8.,35.0,21) # For entropy
+    lev = np.linspace(-.04,.04,20)
+    probe.render_frame(a, Dat,'pfluc', it, lev, Omega, dt*nstep_save_probe,nstep_cycle/nstep_save_probe, dtheta_sector, norm=(0,Po1-P2))
     plt.grid(False)
     a.axis('equal')
     a.axis('off')
