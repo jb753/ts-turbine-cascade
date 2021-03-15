@@ -61,25 +61,28 @@ def secondary(d, rpm, cp, ga, Pref, Tref):
 
     return d
 
-def render_frame(a, d, varname, it, lev, Omega, dt, nstep_cycle, sector_size, norm=None):
+def render_frame(a, d, varname, it, lev, Omega, dt, nstep_cycle, sector_size, norm=None, avg=False):
     """Plot out contours of a variable at time step it."""
 
     for i, di in enumerate(d):
         xnow = di['x'][:,0,:,it]
         rtnow = di['rt'][:,0,:,it]
         rnow = di['r'][:,0,:,it]
-        varnow = di[varname][:,0,:,it]+0.
+        if avg:
+            varnow = np.mean(di[varname][:,0,:,:]+0.,axis=2)
+        else:
+            varnow = di[varname][:,0,:,it]+0.
 
         if norm is not None:
             varnow = (varnow - norm[0])/norm[1]
-            print(varnow.min())
-            print(varnow.max())
+            # print(varnow.min())
+            # print(varnow.max())
 
-        print(np.shape(varnow))
+        # print(np.shape(varnow))
 
         # If this is a stator, offset backwards by del_theta
         if di['rpm']==0.:
-            rtnow = (rtnow/rnow - Omega*it*dt) * rnow
+            rtnow = (rtnow/rnow - Omega*(it-0)*dt) * rnow
 
         # Duplicate plots so the screen is always full
         for ii in range(-2,6):

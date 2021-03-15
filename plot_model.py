@@ -32,7 +32,7 @@ bids = [0,g.get_nb()-1]
 fracann = np.array([g.get_bv('fracann',bi) for bi in bids])
 nblade = np.array([g.get_bv('nblade',bi) for bi in bids])
 nb_row = np.round(fracann * nblade)
-bid_probe = int(nb_row[0]+1)  # Block ID where probes are located
+bid_probe = int(nb_row[0])  # Block ID where probes are located
 
 
 # Determine the number of grid points on probe patches
@@ -78,19 +78,20 @@ dt = 1./freq/float(nstep_cycle)*float(nstep_save_probe)
 # Number of time steps = num cycles * steps per cycle
 # nt = ncycle * nstep_cycle
 nt = np.shape(Dat_ps['ro'])[-1]
-print(nt)
 # Make non-dimensional time vector = time in seconds * blade passing frequency
 ft = np.linspace(0.,float(nt-1)*dt,nt) * freq
 
 # Get secondary vars, things like static pressure, rotor-relative Mach, etc.
-Dat_ps = probe.secondary(Dat_ps, rpm, cp, ga)
-Dat_ss = probe.secondary(Dat_ss, rpm, cp, ga)
-Dat_ps_free = probe.secondary(Dat_ps_free, rpm, cp, ga)
-Dat_ss_free = probe.secondary(Dat_ss_free, rpm, cp, ga)
 
-# Cut the rotor inlet
 Pdat = 1e5
 Tdat = 300.
+
+Dat_ps = probe.secondary(Dat_ps, rpm, cp, ga, Pdat, Tdat)
+Dat_ss = probe.secondary(Dat_ss, rpm, cp, ga, Pdat, Tdat)
+Dat_ps_free = probe.secondary(Dat_ps_free, rpm, cp, ga, Pdat, Tdat)
+Dat_ss_free = probe.secondary(Dat_ss_free, rpm, cp, ga, Pdat, Tdat)
+
+# Cut the rotor inlet
 b = g.get_block(bid_probe)
 rotor_inlet = ts_tstream_cut.TstreamStructuredCut()
 rotor_inlet.read_from_grid(
@@ -101,8 +102,11 @@ rotor_inlet.read_from_grid(
         )
 
 # Get mass averaged rotor inlet relative stagnation conditions
-_, Po1 = rotor_inlet.mass_avg_1d('pstag_rel')
+_, P1 = rotor_inlet.mass_avg_1d('pstat')
+_, Mrel1 = rotor_inlet.mass_avg_1d('mach_rel')
 _, To1 = rotor_inlet.mass_avg_1d('tstag_rel')
+_, x1 = rotor_inlet.mass_avg_1d('x')
+Po1 = model.cf.from_Ma('Po_P',Mrel1,ga)*P1
 
 #
 # Set up the simple hole model
@@ -110,7 +114,7 @@ _, To1 = rotor_inlet.mass_avg_1d('tstag_rel')
 
 # Choose a constant "pressure margin", or percentage increase of coolant
 # relative to the inlet stagnation condition
-PM = 0.01
+PM = 0.04
 Poc = (1. + PM) * Po1
 
 # Fix a stagnation temperature ratio, i.e. the coolant is this much colder than

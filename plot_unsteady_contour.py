@@ -17,7 +17,7 @@ g = tsr.read(output_file_name + '.hdf5')
 
 # Set the probe locations manually
 bid_probe = range(20)
-pid_probe = [10,]*9 + [8,]*11
+pid_probe = [8,]*9 + [8,]*11
 print(np.array([bid_probe,pid_probe]).astype(int))
 
 # Verify that these probes exist
@@ -135,20 +135,42 @@ dtheta_step = Omega * dt
 
 # Finished reading data, now make some plots
 
+# Time-avg
+
+f,a = plt.subplots(figsize=(4.,4.))  # Create a figure and axis to plot into
+plt.set_cmap('cubehelix_r')
+lev = np.linspace(-8.,35.0,21) # For entropy
+probe.render_frame(a, Dat,'ds', 0, lev, Omega, dt*nstep_save_probe,nstep_cycle/nstep_save_probe, dtheta_sector, norm=(0.,1.),avg=True)
+plt.grid(False)
+a.axis('square')
+a.axis('off')
+# a.set_ylim([0.,dtheta_sector*Dat[0]['r'][0,0,0,0]])
+a.set_xlim([-0.06,0.34])
+a.set_ylim([0.,0.4])
+plt.tight_layout(pad=0.1)  # Remove extraneous white space
+plt.savefig('avg.png',dpi=100)
+plt.close(f)
+
+quit()
+
+# Movie
 for it in range(nt):
     print('Rendering frame %d/%d'%(it,nt))
-    f,a = plt.subplots()  # Create a figure and axis to plot into
+    f,a = plt.subplots(figsize=(4.,4.))  # Create a figure and axis to plot into
     plt.set_cmap('RdBu')
-    # plt.set_cmap('cubehelix_r')
-    # lev = np.linspace(-8.,35.0,21) # For entropy
-    lev = np.linspace(-.04,.04,20)
-    probe.render_frame(a, Dat,'pfluc', it, lev, Omega, dt*nstep_save_probe,nstep_cycle/nstep_save_probe, dtheta_sector, norm=(0,Po1-P2))
+    plt.set_cmap('cubehelix_r')
+    lev = np.linspace(-8.,35.0,21) # For entropy
+    # lev = np.linspace(-.04,.04,20)
+    # probe.render_frame(a, Dat,'pfluc', it, lev, Omega, dt*nstep_save_probe,nstep_cycle/nstep_save_probe, dtheta_sector, norm=(0,Po1-P2))
+    probe.render_frame(a, Dat,'ds', it, lev, Omega, dt*nstep_save_probe,nstep_cycle/nstep_save_probe, dtheta_sector, norm=(0.,1.))
     plt.grid(False)
-    a.axis('equal')
+    a.axis('square')
     a.axis('off')
-    a.set_ylim([0.,dtheta_sector*Dat[0]['r'][0,0,0,0]])
-    plt.tight_layout()  # Remove extraneous white space
-    plt.savefig('%d.png'%it,dpi=200)
+    # a.set_ylim([0.,dtheta_sector*Dat[0]['r'][0,0,0,0]])
+    a.set_xlim([-0.06,0.34])
+    a.set_ylim([0.,0.4])
+    plt.tight_layout(pad=0.1)  # Remove extraneous white space
+    plt.savefig('%d.png'%it,dpi=100)
     plt.close(f)
 
 plt.show()  # Render the plot
